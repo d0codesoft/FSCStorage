@@ -1,0 +1,39 @@
+[Unit]
+Description=File storage service
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/fsc.storage
+ExecStart=/usr/bin/dotnet /opt/fsc.storage/scp.filestorage.dll
+
+SyslogIdentifier=fsc-storage
+User=fsc-user
+Group=fsc-user
+
+# 🔁 Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+RestartForceExitStatus=SIGABRT SIGSEGV
+
+# 🐶 Watchdog
+Type=notify
+WatchdogSec=30
+NotifyAccess=main
+
+StandardOutput=journal
+StandardError=journal
+
+ReadWritePaths=/var/lib/fsc.storage /var/log/fsc.storage /opt/fsc.storage
+
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_NOLOGO=true
+Environment=DOTNET_PRINT_TELEMETRY_MESSAGE=true
+EnvironmentFile=/etc/default/fscstorage-env
+
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

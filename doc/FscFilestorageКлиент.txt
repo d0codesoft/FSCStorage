@@ -1,0 +1,116 @@
+// Общий модуль FscFilestorageКлиент
+// Клиент
+// 1С:Предприятие 8.3
+//
+// Клиентские обертки вызывают серверный модуль FscFilestorageСервер.
+// ApiToken и TenantGuid можно хранить в константах/настройках вашей конфигурации
+// и передавать в эти методы из формы или обработки.
+
+#Область FileAPI
+
+Функция ЗагрузитьФайл(ПутьКФайлу, ApiToken, TenantGuid, Категория = Неопределено, ВнешнийКлюч = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ЗагрузитьФайл(ПутьКФайлу, ApiToken, TenantGuid, Категория, ВнешнийКлюч);
+КонецФункции
+
+Функция ПолучитьСписокФайлов(ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьСписокФайлов(ApiToken, TenantGuid);
+КонецФункции
+
+Функция ПолучитьИнформациюОФайле(ФайлGuid, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьИнформациюОФайле(ФайлGuid, ApiToken, TenantGuid);
+КонецФункции
+
+Функция СкачатьФайл(ФайлGuid, ПутьСохранения, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.СкачатьФайл(ФайлGuid, ПутьСохранения, ApiToken, TenantGuid);
+КонецФункции
+
+Функция УдалитьФайл(ФайлGuid, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.УдалитьФайл(ФайлGuid, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ОчиститьOrphanФайлы(ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ОчиститьOrphanФайлы(ApiToken, TenantGuid);
+КонецФункции
+
+#КонецОбласти
+
+#Область MultipartAPI
+
+Функция ИнициализироватьMultipart(ПутьКФайлу, TenantId, ApiToken, TenantGuid, РазмерЧасти = Неопределено, ОжидаемыйSha256 = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ИнициализироватьMultipart(
+		ПутьКФайлу,
+		TenantId,
+		ApiToken,
+		TenantGuid,
+		РазмерЧасти,
+		ОжидаемыйSha256);
+КонецФункции
+
+Функция ЗагрузитьЧастьMultipart(UploadId, НомерЧасти, ПутьКФайлуЧасти, ApiToken, TenantGuid, Sha256Части = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ЗагрузитьЧастьMultipart(
+		UploadId,
+		НомерЧасти,
+		ПутьКФайлуЧасти,
+		ApiToken,
+		TenantGuid,
+		Sha256Части);
+КонецФункции
+
+Функция ПолучитьСтатусMultipart(UploadId, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьСтатусMultipart(UploadId, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ЗавершитьMultipart(UploadId, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.ЗавершитьMultipart(UploadId, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ОтменитьMultipart(UploadId, ApiToken, TenantGuid) Экспорт
+	Возврат FscFilestorageСервер.ОтменитьMultipart(UploadId, ApiToken, TenantGuid);
+КонецФункции
+
+#КонецОбласти
+
+#Область AdminAPI
+
+Функция ПолучитьTenantы(ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьTenantы(ApiToken, TenantGuid);
+КонецФункции
+
+Функция СоздатьTenant(Имя, ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.СоздатьTenant(Имя, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ПолучитьТекущийTenant(ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьТекущийTenant(ApiToken, TenantGuid);
+КонецФункции
+
+Функция ПолучитьTenantПоID(TenantId, ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьTenantПоID(TenantId, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ОтключитьTenant(TenantId, ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ОтключитьTenant(TenantId, ApiToken, TenantGuid);
+КонецФункции
+
+Функция ПолучитьТокеныTenant(TenantId, ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ПолучитьТокеныTenant(TenantId, ApiToken, TenantGuid);
+КонецФункции
+
+Функция СоздатьТокен(TenantId, Имя, ApiToken, TenantGuid = Неопределено, CanRead = Истина, CanWrite = Ложь, CanDelete = Ложь, IsAdmin = Ложь, ExpiresUtc = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.СоздатьТокен(
+		TenantId,
+		Имя,
+		ApiToken,
+		TenantGuid,
+		CanRead,
+		CanWrite,
+		CanDelete,
+		IsAdmin,
+		ExpiresUtc);
+КонецФункции
+
+Функция ОтозватьТокен(TokenId, ApiToken, TenantGuid = Неопределено) Экспорт
+	Возврат FscFilestorageСервер.ОтозватьТокен(TokenId, ApiToken, TenantGuid);
+КонецФункции
+
+#КонецОбласти

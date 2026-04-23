@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="SCP.StorageFSC/scp.filestorage.csproj" />
+  <Project Path="SCP.StorageFSC.Tests/SCP.StorageFSC.Tests.csproj" />
+</Solution>
