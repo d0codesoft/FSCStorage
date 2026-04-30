@@ -1,5 +1,23 @@
 namespace SCP.StorageFSC.Data.Models
 {
+    public enum FilestoreStateCompress : short
+    {
+        /// <summary>
+        /// File does not need compression.
+        /// </summary>
+        NoCompressionNeeded = 0,
+
+        /// <summary>
+        /// File can be compressed.
+        /// </summary>
+        CanBeCompressed = 1,
+
+        /// <summary>
+        /// File is stored in compressed form.
+        /// </summary>
+        Compressed = 2
+    }
+
     /// <summary>
     /// Physically stored file.
     /// The same file can be used by multiple tenants.
@@ -37,6 +55,11 @@ namespace SCP.StorageFSC.Data.Models
         /// File MIME type.
         /// </summary>
         public string? ContentType { get; set; }
+
+        /// <summary>
+        /// Compression state for the stored file.
+        /// </summary>
+        public FilestoreStateCompress FilestoreStateCompress { get; set; } = FilestoreStateCompress.NoCompressionNeeded;
 
         /// <summary>
         /// Number of active references to the file.

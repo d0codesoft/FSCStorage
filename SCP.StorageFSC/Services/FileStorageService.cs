@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Options;
+using scp.filestorage.Common;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
 using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
 using SCP.StorageFSC.SecurityPermission;
-using System.Runtime.Intrinsics.Arm;
 using System.Security.Cryptography;
 
 namespace SCP.StorageFSC.Services
@@ -77,94 +77,19 @@ namespace SCP.StorageFSC.Services
             }
 
             var tempPath = Path.Combine(_options.DataPath, $".tmp_{Guid.NewGuid():N}");
-            string sha256;
-            string crc32;
-            long fileSize;
 
             try
             {
-                (sha256, crc32, fileSize) = await SaveToTempAndCalculateHashesAsync(
+                await SaveToTempAsync(
                     request.Content,
                     tempPath,
                     cancellationToken);
 
-                var existingStoredFile = await _storedFileRepository.GetByHashesAsync(
-                    sha256,
-                    crc32,
+                var storedFile = await StoreTemporaryFileAsync(
+                    tempPath,
+                    request.FileName,
+                    request.ContentType,
                     cancellationToken);
-
-                StoredFile storedFile;
-                if (existingStoredFile is not null)
-                {
-                    storedFile = existingStoredFile;
-
-                    await _storedFileRepository.IncrementReferenceCountAsync(
-                        storedFile.Id,
-                        cancellationToken);
-
-                    TryDeleteFile(tempPath);
-
-                    _logger.LogInformation(
-                        "Deduplicated file detected. StoredFileId={StoredFileId}, TenantId={TenantId}, Sha256={Sha256}",
-                        storedFile.Id,
-                        current.TenantId,
-                        storedFile.Sha256);
-                }
-                else
-                {
-                    var finalRelativePath = BuildStorageRelativePath(sha256, request.FileName);
-                    var finalFullPath = Path.Combine(_options.DataPath, finalRelativePath);
-
-                    var finalDirectory = Path.GetDirectoryName(finalFullPath);
-                    if (!string.IsNullOrWhiteSpace(finalDirectory))
-                    {
-                        Directory.CreateDirectory(finalDirectory);
-                    }
-
-                    if (File.Exists(finalFullPath))
-                    {
-                        if (TryDeleteFile(tempPath))
-                        {
-                            _logger.LogWarning("Failed to delete file at path: {Path}", tempPath);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("File already exists at destination but failed to delete temp file. TempPath={TempPath}, Destination={Destination}", tempPath, finalFullPath);
-                        }
-
-                    }
-                    else
-                    {
-                        if (!TryMoveFile(tempPath, finalFullPath))
-                        {
-                            _logger.LogWarning("Failed to move file from {Path} to {Destination}", tempPath, finalFullPath);
-                        }
-                    }
-
-                    storedFile = new StoredFile
-                    {
-                        Sha256 = sha256,
-                        Crc32 = crc32,
-                        FileSize = fileSize,
-                        PhysicalPath = finalRelativePath.Replace('\\', '/'),
-                        OriginalFileName = request.FileName,
-                        ContentType = request.ContentType,
-                        ReferenceCount = 1,
-                        CreatedUtc = DateTime.UtcNow,
-                        IsDeleted = false
-                    };
-
-                    storedFile.Id = await _storedFileRepository.InsertAsync(
-                        storedFile,
-                        cancellationToken);
-
-                    _logger.LogInformation(
-                        "Physical file stored. StoredFileId={StoredFileId}, TenantId={TenantId}, Path={PhysicalPath}, Size={FileSize}",
-                        storedFile.Id,
-                        tenantId,
-                        storedFile.PhysicalPath,
-                        storedFile.FileSize);
-                }
 
                 var tenantFile = new TenantFile
                 {
@@ -178,7 +103,7 @@ namespace SCP.StorageFSC.Services
                     CreatedUtc = DateTime.UtcNow
                 };
 
-                tenantFile.Id = await _tenantFileRepository.InsertAsync(
+                _ = await _tenantFileRepository.InsertAsync(
                     tenantFile,
                     cancellationToken);
 
@@ -199,6 +124,115 @@ namespace SCP.StorageFSC.Services
                     "storage.failed",
                     "Failed to store the file.");
             }
+        }
+
+        public async Task<StoredFile> StoreTemporaryFileAsync(
+            string tempFilePath,
+            string originalFileName,
+            string? contentType,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(tempFilePath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(originalFileName);
+
+            if (!File.Exists(tempFilePath))
+                throw new FileNotFoundException($"Temporary file not found: {tempFilePath}", tempFilePath);
+
+            var safeFileName = Path.GetFileName(originalFileName);
+            var (sha256, crc32, fileSize) = await CalculateFileHashesAsync(
+                tempFilePath,
+                cancellationToken);
+            var detectedContentType = await FileContentTypeDetector.DetectAsync(
+                tempFilePath,
+                safeFileName,
+                cancellationToken: cancellationToken);
+            var effectiveContentType = ResolveContentType(contentType, detectedContentType);
+
+            var existingStoredFile = await _storedFileRepository.GetByHashesAsync(
+                sha256,
+                crc32,
+                cancellationToken);
+
+            if (existingStoredFile is not null)
+            {
+                await _storedFileRepository.IncrementReferenceCountAsync(
+                    existingStoredFile.Id,
+                    cancellationToken);
+
+                TryDeleteFile(tempFilePath);
+
+                _logger.LogInformation(
+                    "Deduplicated file detected. StoredFileId={StoredFileId}, Sha256={Sha256}, Crc32={Crc32}",
+                    existingStoredFile.Id,
+                    existingStoredFile.Sha256,
+                    existingStoredFile.Crc32);
+
+                return existingStoredFile;
+            }
+
+            var canBeCompressed = false;
+
+            await using (var file = new FileStream(
+                             tempFilePath,
+                             FileMode.Open,
+                             FileAccess.Read,
+                             FileShare.Read,
+                             bufferSize: 64 * 1024,
+                             useAsync: true))
+            {
+                var compressionDetection = await FileCompressionDetector.DetectAsync(
+                    stream: file,
+                    fileName: safeFileName,
+                    cancellationToken: cancellationToken);
+
+                canBeCompressed = compressionDetection.Decision == FileCompressionDecision.Compress;
+            }
+
+            var finalRelativePath = FileStoragePathBuilder.BuildStorageRelativePath(sha256, safeFileName);
+            var finalFullPath = Path.Combine(_options.DataPath, finalRelativePath);
+
+            var finalDirectory = Path.GetDirectoryName(finalFullPath);
+            if (!string.IsNullOrWhiteSpace(finalDirectory))
+                Directory.CreateDirectory(finalDirectory);
+
+            if (File.Exists(finalFullPath))
+            {
+                TryDeleteFile(tempFilePath);
+            }
+            else if (!TryMoveFile(tempFilePath, finalFullPath))
+            {
+                throw new IOException($"Failed to move file from '{tempFilePath}' to '{finalFullPath}'.");
+            }
+
+            var storedFile = new StoredFile
+            {
+                Sha256 = sha256,
+                Crc32 = crc32,
+                FileSize = fileSize,
+                PhysicalPath = finalRelativePath.Replace('\\', '/'),
+                OriginalFileName = safeFileName,
+                ContentType = effectiveContentType,
+                FilestoreStateCompress = canBeCompressed
+                    ? FilestoreStateCompress.CanBeCompressed
+                    : FilestoreStateCompress.NoCompressionNeeded,
+                ReferenceCount = 1,
+                CreatedUtc = DateTime.UtcNow,
+                IsDeleted = false
+            };
+
+            _ = await _storedFileRepository.InsertAsync(
+                storedFile,
+                cancellationToken);
+
+            _logger.LogInformation(
+                "Physical file stored. StoredFileId={StoredFileId}, Path={PhysicalPath}, Size={FileSize}, ContentType={ContentType}, DetectionSource={DetectionSource}",
+                storedFile.Id,
+                storedFile.PhysicalPath,
+                storedFile.FileSize,
+                storedFile.ContentType,
+                detectedContentType.Source);
+
+            return storedFile;
         }
 
         public async Task<StoredTenantFileDto?> GetFileInfoAsync(
@@ -426,15 +460,6 @@ namespace SCP.StorageFSC.Services
             return Path.Combine(_options.DataPath, normalized);
         }
 
-        private static string BuildStorageRelativePath(string sha256, string fileName)
-        {
-            var extension = Path.GetExtension(fileName);
-            var level1 = sha256[..2];
-            var level2 = sha256.Substring(2, 2);
-
-            return Path.Combine(level1, level2, $"{sha256}{extension}");
-        }
-
         private bool TryDeleteFile(string path)
         {
             try
@@ -478,6 +503,7 @@ namespace SCP.StorageFSC.Services
                 Category = tenantFile.Category,
                 ExternalKey = tenantFile.ExternalKey,
                 ContentType = storedFile.ContentType,
+                FilestoreStateCompress = storedFile.FilestoreStateCompress,
                 FileSize = storedFile.FileSize,
                 Sha256 = storedFile.Sha256,
                 Crc32 = storedFile.Crc32,
@@ -493,14 +519,25 @@ namespace SCP.StorageFSC.Services
             return current.TenantId.Value;
         }
 
-        private static async Task<(string Sha256, string Crc32, long FileSize)> SaveToTempAndCalculateHashesAsync(
+        private static string ResolveContentType(
+            string? providedContentType,
+            FileContentTypeDetectionResult detectedContentType)
+        {
+            if (detectedContentType.Source != FileContentTypeDetectionSource.Fallback)
+                return detectedContentType.ContentType;
+
+            if (!string.IsNullOrWhiteSpace(providedContentType))
+                return providedContentType;
+
+            return detectedContentType.ContentType;
+        }
+
+        private static async Task SaveToTempAsync(
                 Stream input,
                 string tempPath,
                 CancellationToken cancellationToken)
         {
-            using var sha256 = SHA256.Create();
-            long fileSize = 0;
-            var buffer = new byte[64 * 1024];
+            var buffer = new byte[1024 * 1024]; // 1 MB лучше для больших файлов
 
             await using (var output = new FileStream(
                 tempPath,
@@ -516,21 +553,52 @@ namespace SCP.StorageFSC.Services
                     if (read == 0)
                         break;
 
-                    await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    var chunk = buffer.AsMemory(0, read);
 
-                    sha256.TransformBlock(buffer, 0, read, null, 0);
-                    fileSize += read;
+                    await output.WriteAsync(chunk, cancellationToken);
                 }
 
                 await output.FlushAsync(cancellationToken);
             }
+        }
+
+        private static async Task<(string Sha256, string Crc32, long FileSize)> CalculateFileHashesAsync(
+                string filePath,
+                CancellationToken cancellationToken)
+        {
+            using var sha256 = SHA256.Create();
+            var crc32 = new System.IO.Hashing.Crc32();
+
+            long fileSize = 0;
+            var buffer = new byte[1024 * 1024];
+
+            await using (var input = new FileStream(
+                filePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: buffer.Length,
+                useAsync: true))
+            {
+                while (true)
+                {
+                    var read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+                    if (read == 0)
+                        break;
+
+                    var chunk = buffer.AsMemory(0, read);
+
+                    sha256.TransformBlock(buffer, 0, read, null, 0);
+                    crc32.Append(chunk.Span);
+
+                    fileSize += read;
+                }
+            }
 
             sha256.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-            var sha256Hex = Convert.ToHexString(sha256.Hash!);
 
-            byte[] fileBytes = await File.ReadAllBytesAsync(tempPath, cancellationToken);
-            byte[] crcBytes = System.IO.Hashing.Crc32.Hash(fileBytes);
-            var crc32Hex = Convert.ToHexString(crcBytes);
+            var sha256Hex = Convert.ToHexString(sha256.Hash!);
+            var crc32Hex = Convert.ToHexString(crc32.GetCurrentHash());
 
             return (sha256Hex, crc32Hex, fileSize);
         }

@@ -8,6 +8,7 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<StoredFile?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<StoredFile?> GetBySha256Async(string sha256, CancellationToken cancellationToken = default);
         Task<StoredFile?> GetByHashesAsync(string sha256, string crc32, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<StoredFile>> GetActiveAsync(CancellationToken cancellationToken = default);
         Task<bool> IncrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default);
         Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<StoredFile>> GetOrphanFilesAsync(CancellationToken cancellationToken = default);

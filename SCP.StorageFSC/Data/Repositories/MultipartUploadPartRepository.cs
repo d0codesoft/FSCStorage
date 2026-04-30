@@ -1,6 +1,8 @@
 using Dapper;
+using Microsoft.Data.Sqlite;
 using scp.filestorage.Data.Models;
 using SCP.StorageFSC.Data;
+using System.Data;
 
 namespace scp.filestorage.Data.Repositories
 {
@@ -21,10 +23,6 @@ namespace scp.filestorage.Data.Repositories
                 INSERT INTO multipart_upload_parts
                 (
                     id,
-                    public_id,
-                    created_utc,
-                    updated_utc,
-                    row_version,
                     multipart_upload_session_id,
                     part_number,
                     offset_bytes,
@@ -36,15 +34,14 @@ namespace scp.filestorage.Data.Repositories
                     uploaded_at_utc,
                     error_message,
                     retry_count,
-                    last_failed_at_utc
+                    last_failed_at_utc,
+                    created_utc,
+                    updated_utc,
+                    row_version
                 )
                 VALUES
                 (
                     @Id,
-                    @PublicId,
-                    @CreatedUtc,
-                    @UpdatedUtc,
-                    @RowVersion,
                     @MultipartUploadSessionId,
                     @PartNumber,
                     @OffsetBytes,
@@ -56,35 +53,52 @@ namespace scp.filestorage.Data.Repositories
                     @UploadedAtUtc,
                     @ErrorMessage,
                     @RetryCount,
-                    @LastFailedAtUtc
+                    @LastFailedAtUtc,
+                    @CreatedUtc,
+                    @UpdatedUtc,
+                    @RowVersion
                 );
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    part.Id,
-                    part.PublicId,
-                    part.CreatedUtc,
-                    part.UpdatedUtc,
-                    part.RowVersion,
-                    part.MultipartUploadSessionId,
-                    part.PartNumber,
-                    part.OffsetBytes,
-                    part.SizeInBytes,
-                    part.StorageKey,
-                    part.ChecksumSha256,
-                    part.ProviderPartETag,
-                    Status = (short)part.Status,
-                    part.UploadedAtUtc,
-                    part.ErrorMessage,
-                    part.RetryCount,
-                    part.LastFailedAtUtc
-                },
-                cancellationToken: cancellationToken));
+                await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        part.Id,
+                        part.MultipartUploadSessionId,
+                        part.PartNumber,
+                        part.OffsetBytes,
+                        part.SizeInBytes,
+                        part.StorageKey,
+                        part.ChecksumSha256,
+                        part.ProviderPartETag,
+                        Status = (short)part.Status,
+                        part.UploadedAtUtc,
+                        part.ErrorMessage,
+                        part.RetryCount,
+                        part.LastFailedAtUtc,
+                        part.CreatedUtc,
+                        part.UpdatedUtc,
+                        part.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to insert multipart upload part '{part.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to insert multipart upload part '{part.Id}' due to database error.", ex);
+            }
 
             return part.Id;
         }
@@ -94,33 +108,32 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+                
                 WHERE id = @Id
                 LIMIT 1;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            return await connection.QuerySingleOrDefaultAsync<MultipartUploadPart>(new CommandDefinition(
-                sql,
-                new { Id = id },
-                cancellationToken: cancellationToken));
-        }
-
-        public async Task<MultipartUploadPart?> GetByPublicIdAsync(
-            Guid publicId,
-            CancellationToken cancellationToken = default)
-        {
-            const string sql = SelectBaseSql + """
-                WHERE public_id = @PublicId
-                LIMIT 1;
-                """;
-
-            using var connection = _connectionFactory.CreateConnection();
-
-            return await connection.QuerySingleOrDefaultAsync<MultipartUploadPart>(new CommandDefinition(
-                sql,
-                new { PublicId = publicId.ToString() },
-                cancellationToken: cancellationToken));
+                return await connection.QuerySingleOrDefaultAsync<MultipartUploadPart>(new CommandDefinition(
+                    sql,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload part by id '{id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload part by id '{id}' due to database error.", ex);
+            }
         }
 
         public async Task<MultipartUploadPart?> GetBySessionAndPartNumberAsync(
@@ -129,21 +142,37 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+                
                 WHERE multipart_upload_session_id = @MultipartUploadSessionId
                   AND part_number = @PartNumber
                 LIMIT 1;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            return await connection.QuerySingleOrDefaultAsync<MultipartUploadPart>(new CommandDefinition(
-                sql,
-                new
-                {
-                    MultipartUploadSessionId = multipartUploadSessionId,
-                    PartNumber = partNumber
-                },
-                cancellationToken: cancellationToken));
+                return await connection.QuerySingleOrDefaultAsync<MultipartUploadPart>(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        MultipartUploadSessionId = multipartUploadSessionId,
+                        PartNumber = partNumber
+                    },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload part for session '{multipartUploadSessionId}' and part number '{partNumber}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload part for session '{multipartUploadSessionId}' and part number '{partNumber}' due to database error.", ex);
+            }
         }
 
         public async Task<IReadOnlyList<MultipartUploadPart>> GetBySessionIdAsync(
@@ -151,18 +180,34 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+                
                 WHERE multipart_upload_session_id = @MultipartUploadSessionId
                 ORDER BY part_number;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var rows = await connection.QueryAsync<MultipartUploadPart>(new CommandDefinition(
-                sql,
-                new { MultipartUploadSessionId = multipartUploadSessionId },
-                cancellationToken: cancellationToken));
+                var rows = await connection.QueryAsync<MultipartUploadPart>(new CommandDefinition(
+                    sql,
+                    new { MultipartUploadSessionId = multipartUploadSessionId },
+                    cancellationToken: cancellationToken));
 
-            return rows.ToList();
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload parts for session '{multipartUploadSessionId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load multipart upload parts for session '{multipartUploadSessionId}' due to database error.", ex);
+            }
         }
 
         public async Task<int> CountUploadedPartsAsync(
@@ -176,32 +221,44 @@ namespace scp.filestorage.Data.Repositories
                   AND status IN (@Uploaded, @Verified);
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-                sql,
-                new
-                {
-                    MultipartUploadSessionId = multipartUploadSessionId,
-                    Uploaded = (short)MultipartUploadPartStatus.Uploaded,
-                    Verified = (short)MultipartUploadPartStatus.Verified
-                },
-                cancellationToken: cancellationToken));
+                var count = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        MultipartUploadSessionId = multipartUploadSessionId,
+                        Uploaded = (short)MultipartUploadPartStatus.Uploaded,
+                        Verified = (short)MultipartUploadPartStatus.Verified
+                    },
+                    cancellationToken: cancellationToken));
 
-            return (int)count;
+                return (int)count;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to count uploaded multipart upload parts for session '{multipartUploadSessionId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to count uploaded multipart upload parts for session '{multipartUploadSessionId}' due to database error.", ex);
+            }
         }
 
-        public async Task<bool> UpsertAsync(
+        public async Task<Guid> UpsertAsync(
             MultipartUploadPart part,
             CancellationToken cancellationToken = default)
         {
             const string sql = """
                 INSERT INTO multipart_upload_parts
                 (
-                    public_id,
-                    created_utc,
-                    updated_utc,
-                    row_version,
+                    id,
                     multipart_upload_session_id,
                     part_number,
                     offset_bytes,
@@ -213,14 +270,14 @@ namespace scp.filestorage.Data.Repositories
                     uploaded_at_utc,
                     error_message,
                     retry_count,
-                    last_failed_at_utc
+                    last_failed_at_utc,
+                    created_utc,
+                    updated_utc,
+                    row_version
                 )
                 VALUES
                 (
-                    @PublicId,
-                    @CreatedUtc,
-                    @UpdatedUtc,
-                    @RowVersion,
+                    @Id,
                     @MultipartUploadSessionId,
                     @PartNumber,
                     @OffsetBytes,
@@ -232,9 +289,12 @@ namespace scp.filestorage.Data.Repositories
                     @UploadedAtUtc,
                     @ErrorMessage,
                     @RetryCount,
-                    @LastFailedAtUtc
+                    @LastFailedAtUtc,
+                    @CreatedUtc,
+                    @UpdatedUtc,
+                    @RowVersion
                 )
-                ON CONFLICT(multipart_upload_session_id, part_number)
+                ON CONFLICT(id)
                 DO UPDATE SET
                     updated_utc = excluded.updated_utc,
                     row_version = excluded.row_version,
@@ -250,32 +310,53 @@ namespace scp.filestorage.Data.Repositories
                     last_failed_at_utc = excluded.last_failed_at_utc;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    PublicId = part.PublicId.ToString(),
-                    part.CreatedUtc,
-                    part.UpdatedUtc,
-                    part.RowVersion,
-                    part.MultipartUploadSessionId,
-                    part.PartNumber,
-                    part.OffsetBytes,
-                    part.SizeInBytes,
-                    part.StorageKey,
-                    part.ChecksumSha256,
-                    part.ProviderPartETag,
-                    Status = (short)part.Status,
-                    part.UploadedAtUtc,
-                    part.ErrorMessage,
-                    part.RetryCount,
-                    part.LastFailedAtUtc
-                },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        part.Id,
+                        part.MultipartUploadSessionId,
+                        part.PartNumber,
+                        part.OffsetBytes,
+                        part.SizeInBytes,
+                        part.StorageKey,
+                        part.ChecksumSha256,
+                        part.ProviderPartETag,
+                        Status = (short)part.Status,
+                        part.UploadedAtUtc,
+                        part.ErrorMessage,
+                        part.RetryCount,
+                        part.LastFailedAtUtc,
+                        part.CreatedUtc,
+                        part.UpdatedUtc,
+                        part.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                 if (affected == 0)
+                 {
+                    throw new DataException($"Failed to upsert multipart upload part '{part.Id}' due to data mapping error.");
+                 }
+                 return  part.Id;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to upsert multipart upload part '{part.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to upsert multipart upload part '{part.Id}' due to database error.", ex);
+            }
+
+
         }
 
         public async Task<bool> UpdateAsync(
@@ -302,31 +383,46 @@ namespace scp.filestorage.Data.Repositories
                 WHERE id = @Id;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    part.Id,
-                    part.UpdatedUtc,
-                    part.RowVersion,
-                    part.MultipartUploadSessionId,
-                    part.PartNumber,
-                    part.OffsetBytes,
-                    part.SizeInBytes,
-                    part.StorageKey,
-                    part.ChecksumSha256,
-                    part.ProviderPartETag,
-                    Status = (short)part.Status,
-                    part.UploadedAtUtc,
-                    part.ErrorMessage,
-                    part.RetryCount,
-                    part.LastFailedAtUtc
-                },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        part.Id,
+                        part.UpdatedUtc,
+                        part.RowVersion,
+                        part.MultipartUploadSessionId,
+                        part.PartNumber,
+                        part.OffsetBytes,
+                        part.SizeInBytes,
+                        part.StorageKey,
+                        part.ChecksumSha256,
+                        part.ProviderPartETag,
+                        Status = (short)part.Status,
+                        part.UploadedAtUtc,
+                        part.ErrorMessage,
+                        part.RetryCount,
+                        part.LastFailedAtUtc
+                    },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to update multipart upload part '{part.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to update multipart upload part '{part.Id}' due to database error.", ex);
+            }
         }
 
         public async Task<bool> UpdateStatusAsync(
@@ -354,25 +450,40 @@ namespace scp.filestorage.Data.Repositories
                 WHERE id = @Id;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    Id = id,
-                    Status = (short)status,
-                    UploadedAtUtc = uploadedAtUtc,
-                    ErrorMessage = errorMessage,
-                    RetryCount = retryCount,
-                    LastFailedAtUtc = lastFailedAtUtc,
-                    ChecksumSha256 = checksumSha256,
-                    ProviderPartETag = providerPartETag,
-                    UpdatedUtc = DateTime.UtcNow
-                },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Id = id,
+                        Status = (short)status,
+                        UploadedAtUtc = uploadedAtUtc,
+                        ErrorMessage = errorMessage,
+                        RetryCount = retryCount,
+                        LastFailedAtUtc = lastFailedAtUtc,
+                        ChecksumSha256 = checksumSha256,
+                        ProviderPartETag = providerPartETag,
+                        UpdatedUtc = DateTime.UtcNow
+                    },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to update status for multipart upload part '{id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to update status for multipart upload part '{id}' due to database error.", ex);
+            }
         }
 
         public async Task<bool> DeleteBySessionIdAsync(
@@ -384,14 +495,29 @@ namespace scp.filestorage.Data.Repositories
                 WHERE multipart_upload_session_id = @MultipartUploadSessionId;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new { MultipartUploadSessionId = multipartUploadSessionId },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new { MultipartUploadSessionId = multipartUploadSessionId },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to delete multipart upload parts for session '{multipartUploadSessionId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to delete multipart upload parts for session '{multipartUploadSessionId}' due to database error.", ex);
+            }
         }
 
         public async Task<bool> DeleteAsync(
@@ -403,20 +529,34 @@ namespace scp.filestorage.Data.Repositories
                 WHERE id = @Id;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new { Id = id },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to delete multipart upload part '{id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to delete multipart upload part '{id}' due to database error.", ex);
+            }
         }
 
         private const string SelectBaseSql = """
             SELECT
                 id AS Id,
-                public_id AS PublicId,
                 created_utc AS CreatedUtc,
                 updated_utc AS UpdatedUtc,
                 row_version AS RowVersion,

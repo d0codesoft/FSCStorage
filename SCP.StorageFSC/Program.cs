@@ -12,6 +12,8 @@ using SCP.StorageFSC.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseWindowsService();
+
 builder.Configuration
     .SetBasePath(Directory.GetCurrentDirectory())
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
@@ -23,22 +25,26 @@ builder.Configuration
         reloadOnChange: true)
     .AddEnvironmentVariables();
 
+builder.Services.RegisterDatabase();
+
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection("Paths"));
 
-builder.InitializeLogging();
+var applicationPaths = ApplicationPaths.FromConfiguration(builder.Configuration);
+builder.Services.AddSingleton(applicationPaths);
 
-var basePath = builder.Configuration["Paths:BasePath"];
-if (basePath == null)
-    basePath = Path.Combine(Directory.GetCurrentDirectory(), "files");
+builder.InitializeDataFolder(applicationPaths);
+builder.InitializeLogging(applicationPaths);
 
-var connectionString = $"Data Source={Path.Combine(basePath, "storage.db")}";
+var connectionString = $"Data Source={Path.Combine(applicationPaths.BasePath, "storage.db")}";
 
 builder.Services.AddSingleton<ICurrentTenantAccessor, CurrentTenantAccessor>();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddSingleton<IDbConnectionFactory>(
-    _ => new SqliteConnectionFactory(connectionString));
+    serviceProvider => new SqliteConnectionFactory(
+        connectionString,
+        serviceProvider.GetRequiredService<ILogger<SqliteConnectionFactory>>()));
 
 builder.Services.AddSingleton<IDbInitializer, DbInitializer>();
 
@@ -55,11 +61,20 @@ builder.Services.AddScoped<ITenantStorageService, TenantStorageService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IMultipartUploadSessionRepository, MultipartUploadSessionRepository>();
 builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRepository>();
+builder.Services.AddScoped<IBackgroundTaskRepository, BackgroundTaskRepository>();
 
 builder.Services.Configure<FileStorageMultipartOptions>(
     builder.Configuration.GetSection("FileStorageMultipart"));
 
+builder.Services.Configure<FileStorageCleanupOptions>(
+    builder.Configuration.GetSection("FileStorageCleanup"));
+
+builder.Services.AddSingleton<IFileStorageBackgroundTaskQueue, FileStorageBackgroundTaskQueue>();
+builder.Services.AddScoped<IFileStorageConsistencyService, FileStorageConsistencyService>();
+builder.Services.AddScoped<IMultipartUploadBackgroundTaskProcessor, MultipartUploadBackgroundTaskProcessor>();
 builder.Services.AddScoped<IFileStorageMultipartService, FileStorageMultipartService>();
+builder.Services.AddHostedService<FileStorageBackgroundService>();
+builder.Services.AddHostedService<FileStorageCleanupBackgroundService>();
 
 builder.Services.AddControllers();
 
@@ -73,6 +88,7 @@ await app.InitializeDatabaseAsync();
 await app.InitializeAdminTokenAsync();
 
 app.UseApplicationRequestLogging();
+app.UseApplicationExceptionHandling();
 
 if (app.Environment.IsDevelopment())
 {

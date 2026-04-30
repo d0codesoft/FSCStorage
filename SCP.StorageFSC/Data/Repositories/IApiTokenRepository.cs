@@ -9,7 +9,9 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<ApiToken?> GetByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<ApiToken>> GetByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken = default);
         Task<bool> UpdateLastUsedAsync(Guid id, DateTime lastUsedUtc, CancellationToken cancellationToken = default);
+        Task<bool> UpdateLastUsedAsync(ApiToken token, CancellationToken cancellationToken = default);
         Task<bool> RevokeAsync(Guid id, DateTime revokedUtc, CancellationToken cancellationToken = default);
+        Task<bool> RevokeAsync(ApiToken token, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
         Task<bool> HasAnyAdminTokenAsync(CancellationToken cancellationToken = default);
         Task<ApiToken?> GetByNameAsync(string name, CancellationToken cancellationToken = default);

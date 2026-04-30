@@ -328,6 +328,12 @@ public sealed class FileStorageServiceTests : IDisposable
             return Task.FromResult(_items.FirstOrDefault(file => file.Sha256 == sha256 && file.Crc32 == crc32 && !file.IsDeleted));
         }
 
+        public Task<IReadOnlyList<StoredFile>> GetActiveAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredFile>>(
+                _items.Where(file => !file.IsDeleted).ToList());
+        }
+
         public Task<bool> IncrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
         {
             var item = _items.FirstOrDefault(file => file.Id == id);

@@ -4,6 +4,7 @@ using scp.filestorage.Data.Dto;
 using scp.filestorage.Data.Models;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.Services;
+using SCP.StorageFSC;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -14,6 +15,8 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "scp-multipart-tests", Guid.NewGuid().ToString("N"));
     private readonly InMemoryMultipartUploadSessionRepository _sessions = new();
     private readonly InMemoryMultipartUploadPartRepository _parts = new();
+    private readonly InMemoryStoredFileRepository _storedFiles = new();
+    private readonly TestFileStorageBackgroundTaskQueue _queue = new();
     private readonly Guid _tenantId = Guid.NewGuid();
 
     public FileStorageMultipartServiceTests()
@@ -77,7 +80,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task CompleteAsync_WhenAllPartsUploaded_MergesFileAndCleansTempParts()
+    public async Task CompleteAsync_WhenAllPartsUploaded_QueuesBackgroundMerge()
     {
         var sut = CreateService();
         var content = Encoding.UTF8.GetBytes("hello");
@@ -92,14 +95,45 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             UploadId = init.UploadId
         });
 
-        Assert.Equal(MultipartUploadStatus.Completed, result.Status);
-        Assert.Equal(Sha256(content), result.FinalChecksumSha256);
-        Assert.True(File.Exists(result.PhysicalPath));
-        Assert.Equal("hello", await File.ReadAllTextAsync(result.PhysicalPath));
-        Assert.All(_parts.Items, part => Assert.Equal(MultipartUploadPartStatus.Verified, part.Status));
+        Assert.Equal(MultipartUploadStatus.Completing, result.Status);
+        Assert.Null(result.FinalChecksumSha256);
+        var queuedTask = Assert.Single(_queue.Items);
+        Assert.Equal(FileStorageBackgroundTaskType.MergeMultipartUpload, queuedTask.Type);
+        Assert.Equal(init.UploadId, queuedTask.UploadId);
+
+        var session = Assert.Single(_sessions.Items);
+        Assert.Equal(MultipartUploadStatus.Completing, session.Status);
+    }
+
+    [Fact]
+    public async Task MultipartBackgroundProcessor_MergesFileAndCleansTempParts()
+    {
+        var sut = CreateService();
+        var processor = CreateProcessor();
+        var content = Encoding.UTF8.GetBytes("hello");
+        var init = await InitAsync(sut, expectedChecksum: Sha256(content));
+
+        await UploadPartAsync(sut, init.UploadId, 1, "he");
+        await UploadPartAsync(sut, init.UploadId, 2, "ll");
+        await UploadPartAsync(sut, init.UploadId, 3, "o");
+        await sut.CompleteAsync(new CompleteMultipartUploadRequestDto
+        {
+            UploadId = init.UploadId
+        });
+
+        await processor.MergePartsAsync(init.UploadId);
 
         var session = Assert.Single(_sessions.Items);
         Assert.Equal(MultipartUploadStatus.Completed, session.Status);
+        Assert.Equal(Sha256(content), session.FinalChecksumSha256);
+        Assert.All(_parts.Items, part => Assert.Equal(MultipartUploadPartStatus.Verified, part.Status));
+
+        var status = await sut.GetStatusAsync(init.UploadId);
+        Assert.NotNull(status);
+        Assert.Equal(MultipartUploadStatus.Completed, status.Status);
+        Assert.Equal(Sha256(content), status.FinalChecksumSha256);
+        Assert.True(File.Exists(status.PhysicalPath));
+        Assert.Equal("hello", await File.ReadAllTextAsync(status.PhysicalPath));
         Assert.False(Directory.Exists(Path.Combine(_rootPath, session.TempStoragePrefix)));
     }
 
@@ -132,15 +166,37 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
         return new FileStorageMultipartService(
             _sessions,
             _parts,
+            _queue,
+            CreateApplicationPaths(),
             Options.Create(new FileStorageMultipartOptions
             {
-                RootPath = _rootPath,
                 TempFolderName = "_multipart",
                 FilesFolderName = "files",
                 MinPartSizeBytes = 1,
                 MaxPartSizeBytes = 10
             }),
             NullLogger<FileStorageMultipartService>.Instance);
+    }
+
+    private MultipartUploadBackgroundTaskProcessor CreateProcessor()
+    {
+        return new MultipartUploadBackgroundTaskProcessor(
+            _sessions,
+            _parts,
+            new TestFileStorageService(CreateApplicationPaths()),
+            CreateApplicationPaths(),
+            NullLogger<MultipartUploadBackgroundTaskProcessor>.Instance);
+    }
+
+    private ApplicationPaths CreateApplicationPaths()
+    {
+        return new ApplicationPaths
+        {
+            BasePath = _rootPath,
+            LogsPath = Path.Combine(_rootPath, "logs"),
+            DataPath = Path.Combine(_rootPath, "data"),
+            MultipartTempPath = Path.Combine(_rootPath, "temp")
+        };
     }
 
     private Task<InitMultipartUploadResultDto> InitAsync(
@@ -196,11 +252,6 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             return Task.FromResult(_items.FirstOrDefault(session => session.Id == id));
         }
 
-        public Task<MultipartUploadSession?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(_items.FirstOrDefault(session => session.PublicId == publicId));
-        }
-
         public Task<MultipartUploadSession?> GetByUploadIdAsync(Guid uploadId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.FirstOrDefault(session => session.UploadId == uploadId));
@@ -218,6 +269,14 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
                     session.ExpiresAtUtc.HasValue &&
                     session.ExpiresAtUtc.Value <= utcNow &&
                     session.Status is MultipartUploadStatus.Created or MultipartUploadStatus.Uploading).ToList());
+        }
+
+        public Task<IReadOnlyList<MultipartUploadSession>> GetByStatusAsync(
+            MultipartUploadStatus status,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<MultipartUploadSession>>(
+                _items.Where(session => session.Status == status).ToList());
         }
 
         public Task<bool> UpdateAsync(MultipartUploadSession session, CancellationToken cancellationToken = default)
@@ -245,7 +304,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             session.FailedAtUtc = failedAtUtc;
             session.CompletedAtUtc = completedAtUtc;
             session.StoredFileId = storedFileId;
-            session.UpdatedUtc = DateTime.UtcNow;
+            session.MarkUpdated();
             return Task.FromResult(true);
         }
 
@@ -255,13 +314,197 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             if (session is null)
                 return Task.FromResult(false);
 
-            session.UpdatedUtc = updatedUtc;
+            session.MarkUpdated();
             return Task.FromResult(true);
         }
 
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.RemoveAll(session => session.Id == id) > 0);
+        }
+
+        public Task<int> DeleteTerminalOlderThanAsync(DateTime cutoffUtc, CancellationToken cancellationToken = default)
+        {
+            var removed = _items.RemoveAll(session =>
+                (session.Status is MultipartUploadStatus.Completed
+                    or MultipartUploadStatus.Aborted
+                    or MultipartUploadStatus.Failed
+                    or MultipartUploadStatus.Expired) &&
+                (session.CompletedAtUtc ?? session.FailedAtUtc ?? session.UpdatedUtc ?? session.CreatedUtc) < cutoffUtc);
+
+            return Task.FromResult(removed);
+        }
+    }
+
+    private sealed class TestFileStorageBackgroundTaskQueue : IFileStorageBackgroundTaskQueue
+    {
+        private readonly List<FileStorageBackgroundTask> _items = [];
+        public IReadOnlyList<FileStorageBackgroundTask> Items => _items;
+
+        public ValueTask QueueAsync(
+            FileStorageBackgroundTask task,
+            CancellationToken cancellationToken = default)
+        {
+            _items.Add(task);
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<FileStorageBackgroundTask> DequeueAsync(CancellationToken cancellationToken)
+        {
+            return ValueTask.FromResult(_items[0]);
+        }
+    }
+
+    private sealed class InMemoryStoredFileRepository : SCP.StorageFSC.Data.Repositories.IStoredFileRepository
+    {
+        private readonly List<SCP.StorageFSC.Data.Models.StoredFile> _items = [];
+
+        public Task<Guid> InsertAsync(SCP.StorageFSC.Data.Models.StoredFile file, CancellationToken cancellationToken = default)
+        {
+            _items.Add(file);
+            return Task.FromResult(file.Id);
+        }
+
+        public Task<SCP.StorageFSC.Data.Models.StoredFile?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.FirstOrDefault(file => file.Id == id));
+        }
+
+        public Task<SCP.StorageFSC.Data.Models.StoredFile?> GetBySha256Async(string sha256, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.FirstOrDefault(file => file.Sha256 == sha256 && !file.IsDeleted));
+        }
+
+        public Task<SCP.StorageFSC.Data.Models.StoredFile?> GetByHashesAsync(string sha256, string crc32, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.FirstOrDefault(file => file.Sha256 == sha256 && file.Crc32 == crc32 && !file.IsDeleted));
+        }
+
+        public Task<IReadOnlyList<SCP.StorageFSC.Data.Models.StoredFile>> GetActiveAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<SCP.StorageFSC.Data.Models.StoredFile>>(
+                _items.Where(file => !file.IsDeleted).ToList());
+        }
+
+        public Task<bool> IncrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var file = _items.FirstOrDefault(item => item.Id == id);
+            if (file is null)
+                return Task.FromResult(false);
+
+            file.ReferenceCount++;
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var file = _items.FirstOrDefault(item => item.Id == id);
+            if (file is null)
+                return Task.FromResult(false);
+
+            file.ReferenceCount = Math.Max(0, file.ReferenceCount - 1);
+            return Task.FromResult(true);
+        }
+
+        public Task<IReadOnlyList<SCP.StorageFSC.Data.Models.StoredFile>> GetOrphanFilesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<SCP.StorageFSC.Data.Models.StoredFile>>(
+                _items.Where(file => file.ReferenceCount <= 0 && !file.IsDeleted).ToList());
+        }
+
+        public Task<bool> MarkDeletedAsync(Guid id, DateTime deletedUtc, CancellationToken cancellationToken = default)
+        {
+            var file = _items.FirstOrDefault(item => item.Id == id);
+            if (file is null)
+                return Task.FromResult(false);
+
+            file.DeletedUtc = deletedUtc;
+            file.IsDeleted = true;
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.RemoveAll(file => file.Id == id) > 0);
+        }
+    }
+
+    private sealed class TestFileStorageService : SCP.StorageFSC.InterfacesService.IFileStorageService
+    {
+        private readonly ApplicationPaths _applicationPaths;
+
+        public TestFileStorageService(ApplicationPaths applicationPaths)
+        {
+            _applicationPaths = applicationPaths;
+        }
+
+        public Task<SCP.StorageFSC.Data.Dto.SaveFileResult> SaveFileAsync(
+            SCP.StorageFSC.Data.Dto.SaveFileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public async Task<SCP.StorageFSC.Data.Models.StoredFile> StoreTemporaryFileAsync(
+            string tempFilePath,
+            string originalFileName,
+            string? contentType,
+            CancellationToken cancellationToken = default)
+        {
+            var bytes = await File.ReadAllBytesAsync(tempFilePath, cancellationToken);
+            var sha256 = Convert.ToHexString(SHA256.HashData(bytes));
+            var crc32 = Convert.ToHexString(System.IO.Hashing.Crc32.Hash(bytes));
+            var relativePath = scp.filestorage.Common.FileStoragePathBuilder
+                .BuildStorageRelativePath(sha256, originalFileName)
+                .Replace('\\', '/');
+            var finalPath = Path.Combine(_applicationPaths.DataPath, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
+            File.Move(tempFilePath, finalPath, overwrite: true);
+
+            return new SCP.StorageFSC.Data.Models.StoredFile
+            {
+                Sha256 = sha256,
+                Crc32 = crc32,
+                FileSize = bytes.Length,
+                PhysicalPath = relativePath,
+                OriginalFileName = Path.GetFileName(originalFileName),
+                ContentType = contentType,
+                ReferenceCount = 1,
+                CreatedUtc = DateTime.UtcNow,
+                IsDeleted = false
+            };
+        }
+
+        public Task<SCP.StorageFSC.Data.Dto.StoredTenantFileDto?> GetFileInfoAsync(
+            Guid fileGuid,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<IReadOnlyList<SCP.StorageFSC.Data.Dto.StoredTenantFileDto>> GetFilesAsync(
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<SCP.StorageFSC.Data.Dto.FileContentResult?> OpenReadAsync(
+            Guid fileGuid,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<bool> DeleteFileAsync(
+            Guid fileGuid,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<int> DeleteOrphanFilesAsync(CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 
@@ -283,7 +526,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
 
         public Task<MultipartUploadPart?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(_items.FirstOrDefault(part => part.PublicId == publicId));
+            return Task.FromResult(_items.FirstOrDefault(part => part.Id == publicId));
         }
 
         public Task<MultipartUploadPart?> GetBySessionAndPartNumberAsync(
@@ -311,7 +554,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
                 part.Status is MultipartUploadPartStatus.Uploaded or MultipartUploadPartStatus.Verified));
         }
 
-        public Task<bool> UpsertAsync(MultipartUploadPart part, CancellationToken cancellationToken = default)
+        public Task<Guid> UpsertAsync(MultipartUploadPart part, CancellationToken cancellationToken = default)
         {
             var existing = _items.FindIndex(item => item.Id == part.Id);
             if (existing >= 0)
@@ -319,7 +562,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             else
                 _items.Add(part);
 
-            return Task.FromResult(true);
+            return Task.FromResult(part.Id);
         }
 
         public Task<bool> UpdateAsync(MultipartUploadPart part, CancellationToken cancellationToken = default)

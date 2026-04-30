@@ -8,7 +8,7 @@ namespace SCP.StorageFSC.Data.Models
         /// <summary>
         /// External tenant GUID identifier passed through the API.
         /// </summary>
-        public Guid TenantGuid { get; set; }
+        public Guid ExternalTenantId { get; set; }
 
         /// <summary>
         /// Tenant code/name.

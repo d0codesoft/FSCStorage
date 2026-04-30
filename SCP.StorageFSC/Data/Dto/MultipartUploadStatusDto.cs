@@ -16,6 +16,9 @@ namespace scp.filestorage.Data.Dto
         public int UploadedPartCount { get; set; }
         public IReadOnlyList<int> UploadedParts { get; set; } = Array.Empty<int>();
         public MultipartUploadStatus Status { get; set; }
+        public string? FinalChecksumSha256 { get; set; }
+        public string RelativePath { get; set; } = string.Empty;
+        public string PhysicalPath { get; set; } = string.Empty;
         public string? ErrorCode { get; set; }
         public string? ErrorMessage { get; set; }
         public string TempStoragePrefix { get; set; } = string.Empty;

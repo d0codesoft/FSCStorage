@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using SCP.StorageFSC.Data.Models;
+using SCP.StorageFSC.Data.Repositories;
+using scp.filestorage.Services;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
@@ -11,15 +14,21 @@ namespace SCP.StorageFSC.Controllers
     public class TenantAdminController : Controller
     {
         private readonly ITenantStorageService _tenantStorageService;
+        private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
+        private readonly IBackgroundTaskRepository _backgroundTaskRepository;
         private readonly ILogger<TenantAdminController> _logger;
         private readonly ICurrentTenantAccessor _currentTenantAccessor;
 
         public TenantAdminController(
             ITenantStorageService tenantStorageService,
+            IFileStorageBackgroundTaskQueue backgroundTaskQueue,
+            IBackgroundTaskRepository backgroundTaskRepository,
             ICurrentTenantAccessor currentTenantAccessor,
             ILogger<TenantAdminController> logger)
         {
             _tenantStorageService = tenantStorageService;
+            _backgroundTaskQueue = backgroundTaskQueue;
+            _backgroundTaskRepository = backgroundTaskRepository;
             _logger = logger;
             _currentTenantAccessor = currentTenantAccessor;
         }
@@ -220,6 +229,79 @@ namespace SCP.StorageFSC.Controllers
                 _logger.LogWarning(ex, "Access denied while revoking token {TokenId}.", tokenId);
                 return Forbid();
             }
+        }
+
+        [HttpPost("storage/check-consistency")]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> QueueFileStorageConsistencyCheck(CancellationToken cancellationToken)
+        {
+            var task = FileStorageBackgroundTask.CheckDatabaseConsistency();
+
+            await _backgroundTaskQueue.QueueAsync(task, cancellationToken);
+
+            _logger.LogInformation(
+                "File storage consistency check queued by admin request. TaskId={TaskId}",
+                task.TaskId);
+
+            return Accepted(new
+            {
+                task.TaskId,
+                task.Type,
+                task.CreatedAtUtc,
+                Status = BackgroundTaskStatus.Queued,
+                StatusName = BackgroundTaskStatus.Queued.ToString()
+            });
+        }
+
+        [HttpGet("storage/tasks/active")]
+        [ProducesResponseType(typeof(IReadOnlyList<BackgroundTaskDto>), StatusCodes.Status200OK)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> GetActiveBackgroundTasks(CancellationToken cancellationToken)
+        {
+            var tasks = await _backgroundTaskRepository.GetActiveAsync(cancellationToken);
+            return Ok(tasks.Select(ToDto).ToArray());
+        }
+
+        [HttpGet("storage/tasks/completed")]
+        [ProducesResponseType(typeof(IReadOnlyList<BackgroundTaskDto>), StatusCodes.Status200OK)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> GetCompletedBackgroundTasks(
+            [FromQuery] int limit = 100,
+            CancellationToken cancellationToken = default)
+        {
+            var tasks = await _backgroundTaskRepository.GetCompletedAsync(limit, cancellationToken);
+            return Ok(tasks.Select(ToDto).ToArray());
+        }
+
+        [HttpGet("storage/tasks/{taskId:guid}")]
+        [ProducesResponseType(typeof(BackgroundTaskDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> GetBackgroundTask(Guid taskId, CancellationToken cancellationToken)
+        {
+            var task = await _backgroundTaskRepository.GetByTaskIdAsync(taskId, cancellationToken);
+            return task is null ? NotFound() : Ok(ToDto(task));
+        }
+
+        private static BackgroundTaskDto ToDto(BackgroundTask task)
+        {
+            var typeName = Enum.IsDefined(typeof(FileStorageBackgroundTaskType), (int)task.Type)
+                ? ((FileStorageBackgroundTaskType)task.Type).ToString()
+                : $"Unknown({task.Type})";
+
+            return new BackgroundTaskDto(
+                task.TaskId,
+                task.Type,
+                typeName,
+                task.Status,
+                task.Status.ToString(),
+                task.UploadId,
+                task.QueuedAtUtc,
+                task.StartedAtUtc,
+                task.CompletedAtUtc,
+                task.FailedAtUtc,
+                task.ErrorMessage,
+                task.ResultSummary);
         }
     }
 }

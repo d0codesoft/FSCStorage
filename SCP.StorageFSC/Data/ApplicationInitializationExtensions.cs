@@ -1,7 +1,15 @@
+using scp.filestorage.Data.Handlers;
+
 namespace SCP.StorageFSC.Data
 {
     public static class ApplicationInitializationExtensions
     {
+        public static IServiceCollection RegisterDatabase(this IServiceCollection services)
+        {
+            DapperTypeHandlers.Register();
+            return services;
+        }
+
         /// <summary>
         /// Initializes the database structure at application startup.
         /// </summary>

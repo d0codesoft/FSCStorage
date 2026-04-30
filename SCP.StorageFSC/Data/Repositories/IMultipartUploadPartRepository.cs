@@ -12,10 +12,6 @@ namespace scp.filestorage.Data.Repositories
             Guid id,
             CancellationToken cancellationToken = default);
 
-        Task<MultipartUploadPart?> GetByPublicIdAsync(
-            Guid publicId,
-            CancellationToken cancellationToken = default);
-
         Task<MultipartUploadPart?> GetBySessionAndPartNumberAsync(
             Guid multipartUploadSessionId,
             int partNumber,
@@ -29,7 +25,7 @@ namespace scp.filestorage.Data.Repositories
             Guid multipartUploadSessionId,
             CancellationToken cancellationToken = default);
 
-        Task<bool> UpsertAsync(
+        Task<Guid> UpsertAsync(
             MultipartUploadPart part,
             CancellationToken cancellationToken = default);
 

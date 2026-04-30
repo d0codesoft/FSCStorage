@@ -12,10 +12,6 @@ namespace scp.filestorage.Data.Repositories
             Guid id,
             CancellationToken cancellationToken = default);
 
-        Task<MultipartUploadSession?> GetByPublicIdAsync(
-            Guid publicId,
-            CancellationToken cancellationToken = default);
-
         Task<MultipartUploadSession?> GetByUploadIdAsync(
             Guid uploadId,
             CancellationToken cancellationToken = default);
@@ -26,6 +22,10 @@ namespace scp.filestorage.Data.Repositories
 
         Task<IReadOnlyList<MultipartUploadSession>> GetExpiredPendingAsync(
             DateTime utcNow,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<MultipartUploadSession>> GetByStatusAsync(
+            MultipartUploadStatus status,
             CancellationToken cancellationToken = default);
 
         Task<bool> UpdateAsync(
@@ -49,6 +49,10 @@ namespace scp.filestorage.Data.Repositories
 
         Task<bool> DeleteAsync(
             Guid id,
+            CancellationToken cancellationToken = default);
+
+        Task<int> DeleteTerminalOlderThanAsync(
+            DateTime cutoffUtc,
             CancellationToken cancellationToken = default);
     }
 

@@ -4,6 +4,12 @@
 * text=auto
 
 ###############################################################################
+# Keep Linux deployment scripts usable when checked out from Windows.
+###############################################################################
+scripts/*.sh text eol=lf
+scripts/fsc-storage-env text eol=lf
+
+###############################################################################
 # Set default behavior for command prompt diff.
 #
 # This is need for earlier builds of msysgit that does not have it on by

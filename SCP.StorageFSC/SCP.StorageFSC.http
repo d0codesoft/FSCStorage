@@ -1,6 +1,220 @@
-@SCP.StorageFSC_HostAddress = http://localhost:5082
+@SCP.StorageFSC_HostAddress = http://localhost:5770
+@ApiToken = replace-with-api-token
+@TenantId = 00000000-0000-0000-0000-000000000001
+@FileGuid = 00000000-0000-0000-0000-000000000002
+@UploadId = 00000000-0000-0000-0000-000000000003
+@TokenId = 00000000-0000-0000-0000-000000000004
 
-GET {{SCP.StorageFSC_HostAddress}}/weatherforecast/
+### Admin - get tenants
+GET {{SCP.StorageFSC_HostAddress}}/api/admin/tenants
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Admin - get current tenant
+GET {{SCP.StorageFSC_HostAddress}}/api/admin/tenant/me
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Admin - get tenant by id
+GET {{SCP.StorageFSC_HostAddress}}/api/admin/tenants/{{TenantId}}
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Admin - create tenant
+POST {{SCP.StorageFSC_HostAddress}}/api/admin/tenants
+Authorization: Bearer {{ApiToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "name": "Test tenant"
+}
+
+###
+
+### Admin - disable tenant
+POST {{SCP.StorageFSC_HostAddress}}/api/admin/tenants/{{TenantId}}/disable
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Admin - get tenant tokens
+GET {{SCP.StorageFSC_HostAddress}}/api/admin/tenants/{{TenantId}}/tokens
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Admin - create token
+POST {{SCP.StorageFSC_HostAddress}}/api/admin/tokens
+Authorization: Bearer {{ApiToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tenantId": "{{TenantId}}",
+  "name": "integration-token",
+  "canRead": true,
+  "canWrite": true,
+  "canDelete": false,
+  "isAdmin": false,
+  "expiresUtc": null
+}
+
+###
+
+### Admin - revoke token
+POST {{SCP.StorageFSC_HostAddress}}/api/admin/tokens/{{TokenId}}/revoke
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### File - upload file
+POST {{SCP.StorageFSC_HostAddress}}/api/file/upload
+Authorization: Bearer {{ApiToken}}
+Content-Type: multipart/form-data; boundary=boundary
+Accept: application/json
+
+--boundary
+Content-Disposition: form-data; name="category"
+
+documents
+--boundary
+Content-Disposition: form-data; name="externalKey"
+
+sample-key
+--boundary
+Content-Disposition: form-data; name="file"; filename="sample.txt"
+Content-Type: text/plain
+
+hello from http file
+--boundary--
+
+###
+
+### File - get all tenant files
+GET {{SCP.StorageFSC_HostAddress}}/api/file
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### File - get file info
+GET {{SCP.StorageFSC_HostAddress}}/api/file/{{FileGuid}}
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### File - download file
+GET {{SCP.StorageFSC_HostAddress}}/api/file/{{FileGuid}}/download
+Authorization: Bearer {{ApiToken}}
+
+###
+
+### File - delete file
+DELETE {{SCP.StorageFSC_HostAddress}}/api/file/{{FileGuid}}
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### File - cleanup orphan files
+POST {{SCP.StorageFSC_HostAddress}}/api/file/cleanup-orphans
+Authorization: Bearer {{ApiToken}}
+Accept: application/json
+
+###
+
+### Multipart - init upload
+POST {{SCP.StorageFSC_HostAddress}}/api/multipart/init
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fileName": "large-file.bin",
+  "fileSize": 10485760,
+  "contentType": "application/octet-stream",
+  "partSize": 5242880,
+  "expectedChecksumSha256": null,
+  "tenantId": "{{TenantId}}",
+  "metadata": null,
+  "expiresAtUtc": null
+}
+
+###
+
+### Multipart - upload part by route
+PUT {{SCP.StorageFSC_HostAddress}}/api/multipart/{{UploadId}}/parts/1
+Content-Type: multipart/form-data; boundary=boundary
+Accept: application/json
+
+--boundary
+Content-Disposition: form-data; name="partChecksumSha256"
+
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="part-1.bin"
+Content-Type: application/octet-stream
+
+part-1-content
+--boundary--
+
+###
+
+### Multipart - upload part by form
+POST {{SCP.StorageFSC_HostAddress}}/api/multipart/part
+Content-Type: multipart/form-data; boundary=boundary
+Accept: application/json
+
+--boundary
+Content-Disposition: form-data; name="uploadId"
+
+{{UploadId}}
+--boundary
+Content-Disposition: form-data; name="partNumber"
+
+1
+--boundary
+Content-Disposition: form-data; name="partChecksumSha256"
+
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="part-1.bin"
+Content-Type: application/octet-stream
+
+part-1-content
+--boundary--
+
+###
+
+### Multipart - get status
+GET {{SCP.StorageFSC_HostAddress}}/api/multipart/{{UploadId}}/status
+Accept: application/json
+
+###
+
+### Multipart - complete upload
+POST {{SCP.StorageFSC_HostAddress}}/api/multipart/complete
+Content-Type: application/json
+Accept: application/json
+
+{
+  "uploadId": "{{UploadId}}"
+}
+
+###
+
+### Multipart - abort upload
+POST {{SCP.StorageFSC_HostAddress}}/api/multipart/{{UploadId}}/abort
 Accept: application/json
 
 ###

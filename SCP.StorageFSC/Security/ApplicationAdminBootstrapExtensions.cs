@@ -76,25 +76,30 @@ namespace SCP.StorageFSC.Security
             {
                 adminTenant = new Tenant
                 {
-                    TenantGuid = Guid.NewGuid(),
+                    ExternalTenantId = Guid.NewGuid(),
                     Name = config.Name,
                     IsActive = true,
-                    CreatedUtc = DateTime.UtcNow
+                    CreatedUtc = DateTime.UtcNow,
                 };
 
-                adminTenant.Id = await tenantRepository.InsertAsync(adminTenant, cancellationToken);
+                var result = await tenantRepository.InsertAsync(adminTenant, cancellationToken);
+                if (!result)
+                {
+                    logger.LogError("Failed to insert administrative tenant into database.");
+                    throw new InvalidOperationException("Failed to create administrative tenant.");
+                }
 
                 logger.LogInformation(
-                    "Administrative tenant created. TenantId={TenantId}, TenantGuid={TenantGuid}",
+                    "Administrative tenant created. TenantId={TenantId}, ExternalTenantId={ExternalTenantId}",
                     adminTenant.Id,
-                    adminTenant.TenantGuid);
+                    adminTenant.ExternalTenantId);
             }
             else
             {
                 logger.LogInformation(
                     "Administrative tenant already exists. TenantId={TenantId}, TenantGuid={TenantGuid}",
                     adminTenant.Id,
-                    adminTenant.TenantGuid);
+                    adminTenant.ExternalTenantId);
             }
 
             var tokenHash = TokenHashHelper.ComputeSha256(config.Key);
@@ -120,7 +125,7 @@ namespace SCP.StorageFSC.Security
                 CreatedUtc = DateTime.UtcNow
             };
 
-            token.Id = await apiTokenRepository.InsertAsync(token, cancellationToken);
+            _ = await apiTokenRepository.InsertAsync(token, cancellationToken);
 
             logger.LogInformation(
                 "Administrative API token created. TokenId={TokenId}, TenantId={TenantId}, Prefix={TokenPrefix}",

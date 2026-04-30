@@ -39,7 +39,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         var current = Assert.IsType<CurrentTenantContext>(
             context.Items[TenantContextConstants.CurrentTenantContextItemName]);
         Assert.Equal(tenant.Id, current.TenantId);
-        Assert.Equal(tenant.TenantGuid, current.TenantGuid);
+        Assert.Equal(tenant.ExternalTenantId, current.TenantGuid);
         Assert.False(current.IsAdmin);
         Assert.True(current.CanRead);
         Assert.True(current.CanWrite);
@@ -72,7 +72,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         var tenants = new InMemoryTenantRepository(tenant);
         var nextCalled = false;
         var sut = CreateMiddleware(_ => nextCalled = true);
-        var context = CreateContext(CreatePrincipal(Guid.NewGuid(), tenantId: null, isAdmin: true, scopes: ["admin"]), tenant.TenantGuid);
+        var context = CreateContext(CreatePrincipal(Guid.NewGuid(), tenantId: null, isAdmin: true, scopes: ["admin"]), tenant.ExternalTenantId);
 
         await sut.InvokeAsync(context, tenants);
 
@@ -81,7 +81,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         var current = Assert.IsType<CurrentTenantContext>(
             context.Items[TenantContextConstants.CurrentTenantContextItemName]);
         Assert.Equal(tenant.Id, current.TenantId);
-        Assert.Equal(tenant.TenantGuid, current.TenantGuid);
+        Assert.Equal(tenant.ExternalTenantId, current.TenantGuid);
         Assert.True(current.IsAdmin);
     }
 
@@ -135,7 +135,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         return new Tenant
         {
             Id = Guid.NewGuid(),
-            TenantGuid = Guid.NewGuid(),
+            ExternalTenantId = Guid.NewGuid(),
             Name = "Test tenant",
             IsActive = true,
             CreatedUtc = DateTime.UtcNow
@@ -151,10 +151,10 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
             _tenants = tenants.ToList();
         }
 
-        public Task<Guid> InsertAsync(Tenant tenant, CancellationToken cancellationToken = default)
+        public Task<bool> InsertAsync(Tenant tenant, CancellationToken cancellationToken = default)
         {
             _tenants.Add(tenant);
-            return Task.FromResult(tenant.Id);
+            return Task.FromResult(true);
         }
 
         public Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -164,7 +164,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
 
         public Task<Tenant?> GetByGuidAsync(Guid tenantGuid, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(_tenants.FirstOrDefault(tenant => tenant.TenantGuid == tenantGuid));
+            return Task.FromResult(_tenants.FirstOrDefault(tenant => tenant.ExternalTenantId == tenantGuid));
         }
 
         public Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default)

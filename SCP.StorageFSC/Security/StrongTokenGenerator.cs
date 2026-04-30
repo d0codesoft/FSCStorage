@@ -15,7 +15,7 @@ namespace scp.filestorage.Security
         /// <summary>
         /// URL-safe special characters. This is usually enough for an API token.
         /// </summary>
-        public const string UrlSafeSpecial = "_-";
+        public const string UrlSafeSpecial = "";
 
         /// <summary>
         /// A wider set of special characters.
@@ -62,7 +62,8 @@ namespace scp.filestorage.Security
             string specialAlphabet = UrlSafeSpecial)
         {
             ValidateLength(length);
-            ValidateAlphabet(specialAlphabet, nameof(specialAlphabet));
+            if (requireSpecial)
+                ValidateAlphabet(specialAlphabet, nameof(specialAlphabet));
 
             var requiredGroupsCount =
                 (requireUppercase ? 1 : 0) +
@@ -124,7 +125,7 @@ namespace scp.filestorage.Security
                 requireUppercase: true,
                 requireLowercase: true,
                 requireDigit: true,
-                requireSpecial: true,
+                requireSpecial: !string.IsNullOrEmpty(UrlSafeSpecial),
                 specialAlphabet: UrlSafeSpecial);
         }
 

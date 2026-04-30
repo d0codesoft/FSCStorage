@@ -55,7 +55,7 @@ namespace SCP.StorageFSC.Services
                     ApiTokenId = result?.TokenId,
                     TokenName = result?.Name ?? string.Empty,
                     TenantId = tenant?.Id ?? result?.TenantId,
-                    TenantGuid = tenant?.TenantGuid,
+                    ExternalTenantId = tenant?.ExternalTenantId,
                     TenantName = tenant?.Name ?? string.Empty,
                     IsSuccess = isSuccess,
                     ErrorMessage = errorMessage,

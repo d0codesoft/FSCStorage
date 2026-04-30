@@ -4,36 +4,81 @@ namespace SCP.StorageFSC;
 
 public static class LoggingInitializationExtensions
 {
-    public static WebApplicationBuilder InitializeLogging(this WebApplicationBuilder builder)
+    public static WebApplicationBuilder InitializeLogging(this WebApplicationBuilder builder, ApplicationPaths applicationPaths)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(applicationPaths);
 
-        var configuredLogPath = builder.Configuration["Paths:LogsPath"];
-
-        var logFilePath = string.IsNullOrWhiteSpace(configuredLogPath)
-            ? Path.Combine(Directory.GetCurrentDirectory(), "logs", "app-.log")
-            : (Path.IsPathRooted(configuredLogPath)
-                ? configuredLogPath
-                : Path.Combine(Directory.GetCurrentDirectory(), configuredLogPath));
-
-        var logDirectory = Path.GetDirectoryName(logFilePath);
-
-        if (!string.IsNullOrWhiteSpace(logDirectory))
+        Serilog.Debugging.SelfLog.Enable(msg =>
         {
-            Directory.CreateDirectory(logDirectory);
-        }
+            File.AppendAllText(
+                Path.Combine(AppContext.BaseDirectory, "serilog-selflog.txt"),
+                msg);
+        });
 
-        builder.Services.AddSerilog((services, loggerConfiguration) => loggerConfiguration
-            .ReadFrom.Configuration(builder.Configuration)
-            .ReadFrom.Services(services)
-            .Enrich.FromLogContext()
-            .Enrich.WithMachineName()
-            .Enrich.WithThreadId()
-            .WriteTo.Console()
-            .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day));
+        builder.Host.UseSerilog((context, services, loggerConfiguration) =>
+        {
+            Directory.CreateDirectory(applicationPaths.LogsPath);
 
-        builder.Host.UseSerilog();
+            var logFilePath = Path.Combine(applicationPaths.LogsPath, "app-.log");
+
+            loggerConfiguration
+                .ReadFrom.Configuration(context.Configuration)
+                .ReadFrom.Services(services)
+                .Enrich.FromLogContext()
+                .Enrich.WithMachineName()
+                .Enrich.WithThreadId()
+                .WriteTo.Console()
+                .WriteTo.File(
+                    logFilePath,
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 30);
+        });
 
         return builder;
+    }
+
+    public static WebApplicationBuilder InitializeDataFolder(this WebApplicationBuilder builder, ApplicationPaths applicationPaths)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(applicationPaths);
+
+        using var startupLogger = CreateStartupLogger(applicationPaths);
+
+        try
+        {
+            Directory.CreateDirectory(applicationPaths.BasePath);
+            Directory.CreateDirectory(applicationPaths.LogsPath);
+            Directory.CreateDirectory(applicationPaths.DataPath);
+        }
+        catch (Exception ex)
+        {
+            startupLogger.Error(ex, "Failed to create application directories");
+            throw;
+        }
+
+        return builder;
+    }
+
+    private static Serilog.Core.Logger CreateStartupLogger(ApplicationPaths applicationPaths)
+    {
+        var loggerConfiguration = new LoggerConfiguration()
+            .WriteTo.Console();
+
+        try
+        {
+            var logFilePath = Path.Combine(applicationPaths.LogsPath, "startup-.log");
+
+            loggerConfiguration.WriteTo.File(
+                logFilePath,
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 7);
+        }
+        catch
+        {
+            // Keep console logging available even if the configured log path itself is invalid.
+        }
+
+        return loggerConfiguration.CreateLogger();
     }
 }

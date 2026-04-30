@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "scp_fs_cli": {
+      "commandName": "Project",
+      "commandLineArgs": "upload g:\\Backup\\Sheludko.rar"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://0.0.0.0:5000
+
+DOTNET_PRINT_TELEMETRY_MESSAGE=false
+DOTNET_CLI_TELEMETRY_OPTOUT=1
+
+Paths__BasePath=/var/lib/fsc-storage
+Paths__LogsPath=/var/log/fsc-storage
+Paths__DataPath=/var/lib/fsc-storage/data
+
+FileStorageMultipart__RootPath=/var/lib/fsc-storage
+FileStorageMultipart__TempFolderName=_multipart
+FileStorageMultipart__FilesFolderName=files

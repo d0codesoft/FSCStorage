@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Options;
+using scp.filestorage.Common;
 using scp.filestorage.Data.Dto;
 using scp.filestorage.Data.Models;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.InterfacesService;
+using SCP.StorageFSC;
 using System.Security.Cryptography;
 
 namespace scp.filestorage.Services
@@ -11,23 +13,25 @@ namespace scp.filestorage.Services
     {
         private readonly IMultipartUploadSessionRepository _sessionRepository;
         private readonly IMultipartUploadPartRepository _partRepository;
+        private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
+        private readonly ApplicationPaths _applicationPaths;
         private readonly FileStorageMultipartOptions _options;
         private readonly ILogger<FileStorageMultipartService> _logger;
 
         public FileStorageMultipartService(
             IMultipartUploadSessionRepository sessionRepository,
             IMultipartUploadPartRepository partRepository,
+            IFileStorageBackgroundTaskQueue backgroundTaskQueue,
+            ApplicationPaths applicationPaths,
             IOptions<FileStorageMultipartOptions> options,
             ILogger<FileStorageMultipartService> logger)
         {
             _sessionRepository = sessionRepository;
             _partRepository = partRepository;
+            _backgroundTaskQueue = backgroundTaskQueue;
+            _applicationPaths = applicationPaths;
             _options = options.Value;
             _logger = logger;
-
-            Directory.CreateDirectory(GetRootPath());
-            Directory.CreateDirectory(GetTempRootPath());
-            Directory.CreateDirectory(GetFilesRootPath());
         }
 
         public async Task<InitMultipartUploadResultDto> InitAsync(
@@ -59,10 +63,7 @@ namespace scp.filestorage.Services
 
             var session = new MultipartUploadSession
             {
-                PublicId = Guid.NewGuid(),
                 CreatedUtc = nowUtc,
-                UpdatedUtc = nowUtc,
-                RowVersion = CreateRowVersion(),
                 UploadId = uploadId,
                 TenantId = request.TenantId,
                 OriginalFileName = originalFileName,
@@ -86,7 +87,7 @@ namespace scp.filestorage.Services
                 StoredFileId = null
             };
 
-            session.Id = await _sessionRepository.InsertAsync(session, cancellationToken);
+            var resultId = await _sessionRepository.InsertAsync(session, cancellationToken);
 
             Directory.CreateDirectory(GetUploadDirectory(session));
 
@@ -195,14 +196,11 @@ namespace scp.filestorage.Services
 
             var part = existingPart ?? new MultipartUploadPart
             {
-                PublicId = Guid.NewGuid(),
                 CreatedUtc = uploadedAtUtc,
                 MultipartUploadSessionId = session.Id,
                 PartNumber = request.PartNumber
             };
 
-            part.UpdatedUtc = uploadedAtUtc;
-            part.RowVersion = CreateRowVersion();
             part.OffsetBytes = offset;
             part.SizeInBytes = request.ContentLength;
             part.StorageKey = storageKey.Replace('\\', '/');
@@ -216,7 +214,7 @@ namespace scp.filestorage.Services
             if (existingPart is null)
             {
                 part.RetryCount = 0;
-                part.Id = await _partRepository.InsertAsync(part, cancellationToken);
+                _ = await _partRepository.InsertAsync(part, cancellationToken);
             }
             else
             {
@@ -269,6 +267,16 @@ namespace scp.filestorage.Services
                 .OrderBy(x => x.PartNumber)
                 .Select(x => x.PartNumber)
                 .ToArray();
+            var finalRelativePath = string.Empty;
+            var finalPhysicalPath = string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(session.FinalChecksumSha256))
+            {
+                finalRelativePath = FileStoragePathBuilder
+                    .BuildStorageRelativePath(session.FinalChecksumSha256, session.OriginalFileName)
+                    .Replace('\\', '/');
+                finalPhysicalPath = Path.Combine(GetFilesRootPath(), finalRelativePath);
+            }
 
             return new MultipartUploadStatusDto
             {
@@ -284,6 +292,9 @@ namespace scp.filestorage.Services
                 UploadedPartCount = uploadedParts.Length,
                 UploadedParts = uploadedParts,
                 Status = session.Status,
+                FinalChecksumSha256 = session.FinalChecksumSha256,
+                RelativePath = finalRelativePath,
+                PhysicalPath = finalPhysicalPath,
                 ErrorCode = session.ErrorCode,
                 ErrorMessage = session.ErrorMessage,
                 TempStoragePrefix = session.TempStoragePrefix,
@@ -305,7 +316,9 @@ namespace scp.filestorage.Services
             if (session.Status == MultipartUploadStatus.Completed)
             {
                 var completedAt = session.CompletedAtUtc ?? session.UpdatedUtc ?? session.CreatedUtc;
-                var relativePath = BuildFinalRelativePath(session);
+                var relativePath = FileStoragePathBuilder.BuildStorageRelativePath(
+                    GetCompletedSessionChecksum(session),
+                    session.OriginalFileName);
                 var physicalPath = Path.Combine(GetFilesRootPath(), relativePath);
 
                 return new CompleteMultipartUploadResultDto
@@ -324,6 +337,11 @@ namespace scp.filestorage.Services
                 };
             }
 
+            if (session.Status == MultipartUploadStatus.Completing)
+            {
+                return CreateCompleteResult(session, MultipartUploadStatus.Completing);
+            }
+
             EnsureSessionCanComplete(session);
 
             var parts = await _partRepository.GetBySessionIdAsync(session.Id, cancellationToken);
@@ -334,72 +352,16 @@ namespace scp.filestorage.Services
                 MultipartUploadStatus.Completing,
                 cancellationToken: cancellationToken);
 
-            var finalRelativePath = BuildFinalRelativePath(session);
-            var finalPath = Path.Combine(GetFilesRootPath(), finalRelativePath);
-            Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
-
-            await MergePartsAsync(session, parts, finalPath, cancellationToken);
-
-            var fileInfo = new FileInfo(finalPath);
-            if (fileInfo.Length != session.TotalFileSize)
-            {
-                File.Delete(finalPath);
-                await FailSessionAsync(session, "complete.size_mismatch", "Merged file size mismatch.", cancellationToken);
-                throw new InvalidOperationException(
-                    $"Merged file size mismatch. Expected {session.TotalFileSize}, actual {fileInfo.Length}.");
-            }
-
-            var finalChecksum = await ComputeSha256Async(finalPath, cancellationToken);
-            if (!string.IsNullOrWhiteSpace(session.ExpectedChecksumSha256) &&
-                !string.Equals(session.ExpectedChecksumSha256, finalChecksum, StringComparison.OrdinalIgnoreCase))
-            {
-                File.Delete(finalPath);
-                await FailSessionAsync(session, "complete.checksum_mismatch", "Final file checksum mismatch.", cancellationToken);
-                throw new InvalidOperationException("Final file checksum mismatch.");
-            }
-
-            foreach (var part in parts)
-            {
-                if (part.Status != MultipartUploadPartStatus.Verified)
-                {
-                    await _partRepository.UpdateStatusAsync(
-                        part.Id,
-                        MultipartUploadPartStatus.Verified,
-                        uploadedAtUtc: part.UploadedAtUtc,
-                        checksumSha256: part.ChecksumSha256,
-                        providerPartETag: part.ProviderPartETag,
-                        cancellationToken: cancellationToken);
-                }
-            }
-
-            var completedAtUtc = DateTime.UtcNow;
-            await _sessionRepository.UpdateStatusAsync(
-                session.Id,
-                MultipartUploadStatus.Completed,
-                completedAtUtc: completedAtUtc,
-                cancellationToken: cancellationToken);
-
-            CleanupTempParts(session, parts);
+            await _backgroundTaskQueue.QueueAsync(
+                FileStorageBackgroundTask.MergeMultipartUpload(session.UploadId),
+                cancellationToken);
 
             _logger.LogInformation(
-                "Multipart upload completed. UploadId={UploadId}, FinalPath={FinalPath}",
-                session.UploadId,
-                finalPath);
+                "Multipart upload queued for background completion. UploadId={UploadId}",
+                session.UploadId);
 
-            return new CompleteMultipartUploadResultDto
-            {
-                UploadId = session.UploadId,
-                TenantId = session.TenantId,
-                FileName = session.OriginalFileName,
-                FileSize = session.TotalFileSize,
-                ContentType = session.ContentType,
-                FinalChecksumSha256 = finalChecksum,
-                RelativePath = finalRelativePath.Replace('\\', '/'),
-                PhysicalPath = finalPath,
-                CompletedAtUtc = completedAtUtc,
-                Status = MultipartUploadStatus.Completed,
-                StoredFileId = session.StoredFileId
-            };
+            session.Status = MultipartUploadStatus.Completing;
+            return CreateCompleteResult(session, MultipartUploadStatus.Completing);
         }
 
         public async Task<AbortMultipartUploadResultDto> AbortAsync(
@@ -489,57 +451,6 @@ namespace scp.filestorage.Services
             }
         }
 
-        private async Task MergePartsAsync(
-            MultipartUploadSession session,
-            IReadOnlyList<MultipartUploadPart> parts,
-            string destinationPath,
-            CancellationToken cancellationToken)
-        {
-            var orderedParts = parts.OrderBy(x => x.PartNumber).ToList();
-
-            await using var destination = new FileStream(
-                destinationPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 128 * 1024,
-                useAsync: true);
-
-            foreach (var part in orderedParts)
-            {
-                var sourcePath = GetFullPathFromStorageKey(part.StorageKey);
-                if (!File.Exists(sourcePath))
-                    throw new FileNotFoundException($"Part file not found: {sourcePath}");
-
-                await using var source = new FileStream(
-                    sourcePath,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.Read,
-                    bufferSize: 128 * 1024,
-                    useAsync: true);
-
-                await source.CopyToAsync(destination, 128 * 1024, cancellationToken);
-            }
-
-            await destination.FlushAsync(cancellationToken);
-        }
-
-        private async Task FailSessionAsync(
-            MultipartUploadSession session,
-            string errorCode,
-            string errorMessage,
-            CancellationToken cancellationToken)
-        {
-            await _sessionRepository.UpdateStatusAsync(
-                session.Id,
-                MultipartUploadStatus.Failed,
-                errorCode: errorCode,
-                errorMessage: errorMessage,
-                failedAtUtc: DateTime.UtcNow,
-                cancellationToken: cancellationToken);
-        }
-
         private void CleanupTempParts(
             MultipartUploadSession session,
             IReadOnlyList<MultipartUploadPart> parts)
@@ -564,8 +475,6 @@ namespace scp.filestorage.Services
             }
         }
 
-        private static Guid CreateRowVersion() => Guid.NewGuid();
-
         private static long GetExpectedPartSize(MultipartUploadSession session, int partNumber)
         {
             if (partNumber < session.TotalParts)
@@ -576,40 +485,59 @@ namespace scp.filestorage.Services
         }
 
         private string BuildTempStoragePrefix(Guid tenantId, Guid uploadId) =>
-            Path.Combine(_options.TempFolderName, tenantId.ToString("N"), uploadId.ToString("N"));
+            Path.Combine(_applicationPaths.MultipartTempPath, tenantId.ToString("N"), uploadId.ToString("N"));
 
         private string BuildPartStorageKey(MultipartUploadSession session, int partNumber) =>
             Path.Combine(session.TempStoragePrefix, $"part-{partNumber:D8}.bin");
 
-        private string BuildFinalRelativePath(MultipartUploadSession session)
+        private CompleteMultipartUploadResultDto CreateCompleteResult(
+            MultipartUploadSession session,
+            MultipartUploadStatus status)
         {
-            var fileName = $"{session.UploadId:N}{session.Extension}";
-            return Path.Combine(
-                DateTime.UtcNow.ToString("yyyy"),
-                DateTime.UtcNow.ToString("MM"),
-                fileName);
+            var relativePath = string.Empty;
+            var physicalPath = string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(session.FinalChecksumSha256))
+            {
+                relativePath = FileStoragePathBuilder
+                    .BuildStorageRelativePath(session.FinalChecksumSha256, session.OriginalFileName)
+                    .Replace('\\', '/');
+                physicalPath = Path.Combine(GetFilesRootPath(), relativePath);
+            }
+
+            return new CompleteMultipartUploadResultDto
+            {
+                UploadId = session.UploadId,
+                TenantId = session.TenantId,
+                FileName = session.OriginalFileName,
+                FileSize = session.TotalFileSize,
+                ContentType = session.ContentType,
+                FinalChecksumSha256 = session.FinalChecksumSha256,
+                RelativePath = relativePath,
+                PhysicalPath = physicalPath,
+                CompletedAtUtc = session.CompletedAtUtc ?? default,
+                Status = status,
+                StoredFileId = session.StoredFileId
+            };
         }
 
-        private async Task<string> ComputeSha256Async(string filePath, CancellationToken cancellationToken)
+        private static string GetCompletedSessionChecksum(MultipartUploadSession session)
         {
-            await using var stream = new FileStream(
-                filePath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 128 * 1024,
-                useAsync: true);
+            if (!string.IsNullOrWhiteSpace(session.FinalChecksumSha256))
+                return session.FinalChecksumSha256;
 
-            using var sha = SHA256.Create();
-            var hash = await sha.ComputeHashAsync(stream, cancellationToken);
-            return Convert.ToHexString(hash);
+            if (!string.IsNullOrWhiteSpace(session.ExpectedChecksumSha256))
+                return session.ExpectedChecksumSha256;
+
+            throw new InvalidOperationException(
+                $"Completed multipart session '{session.UploadId}' does not have a final checksum.");
         }
 
-        private string GetRootPath() => _options.RootPath;
+        private string GetRootPath() => _applicationPaths.BasePath;
 
-        private string GetTempRootPath() => Path.Combine(GetRootPath(), _options.TempFolderName);
+        private string GetTempRootPath() => _applicationPaths.MultipartTempPath;
 
-        private string GetFilesRootPath() => Path.Combine(GetRootPath(), _options.FilesFolderName);
+        private string GetFilesRootPath() => _applicationPaths.DataPath;
 
         private string GetUploadDirectory(MultipartUploadSession session) =>
             Path.Combine(GetRootPath(), session.TempStoragePrefix);

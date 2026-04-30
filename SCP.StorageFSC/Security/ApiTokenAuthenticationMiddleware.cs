@@ -91,7 +91,7 @@ namespace SCP.StorageFSC.Security
             if (tenant is not null)
             {
                 currentTenant.TenantId = tenant.Id;
-                currentTenant.TenantGuid = tenant.TenantGuid;
+                currentTenant.TenantGuid = tenant.ExternalTenantId;
                 currentTenant.TenantName = tenant.Name;
             }
 

@@ -9,34 +9,33 @@ namespace SCP.StorageFSC.Data.Schema
         protected override string Sql => """
             CREATE TABLE IF NOT EXISTS db_metadata
             (
-                id                 BLOB PRIMARY KEY,
-                public_id          BLOB    NOT NULL,
+                id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
                 schema_version     INTEGER NOT NULL,
                 schema_name        TEXT    NOT NULL,
-                created_utc        TEXT    NOT NULL,
+                created_utc        TEXT    NOT NULL 
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
                 updated_utc        TEXT    NULL,
-                row_version        BLOB    NOT NULL
+                row_version        BLOB NOT NULL CHECK(length(row_version) = 16)
             );
 
             CREATE TABLE IF NOT EXISTS tenants
             (
-                id            BLOB PRIMARY KEY,
-                public_id     BLOB    NOT NULL,
-                tenant_guid   TEXT    NOT NULL,
-                name          TEXT    NOT NULL,
-                is_active     INTEGER NOT NULL DEFAULT 1,
-                created_utc   TEXT    NOT NULL,
-                updated_utc   TEXT    NULL,
-                row_version   BLOB    NOT NULL,
+                id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                external_tenant_id BLOB NOT NULL CHECK(length(external_tenant_id) = 16),
+                name               TEXT    NOT NULL,
+                is_active          INTEGER NOT NULL DEFAULT 1,
+                created_utc        TEXT    NOT NULL 
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc        TEXT    NULL,
+                row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
 
-                CONSTRAINT uq_tenants_tenant_guid UNIQUE (tenant_guid)
+                CONSTRAINT uq_tenants_external_tenant_id UNIQUE (external_tenant_id)
             );
 
             CREATE TABLE IF NOT EXISTS api_tokens
             (
-                id            BLOB PRIMARY KEY,
-                public_id     BLOB    NOT NULL,
-                tenant_id     INTEGER NOT NULL,
+                id            BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                tenant_id     BLOB NULL CHECK(tenant_id IS NULL OR length(tenant_id)=16),
                 name          TEXT    NOT NULL,
                 token_hash    TEXT    NOT NULL,
                 token_prefix  TEXT    NOT NULL,
@@ -45,29 +44,25 @@ namespace SCP.StorageFSC.Data.Schema
                 can_read      INTEGER NOT NULL DEFAULT 1,
                 can_write     INTEGER NOT NULL DEFAULT 0,
                 can_delete    INTEGER NOT NULL DEFAULT 0,
-                created_utc   TEXT    NOT NULL,
-                updated_utc   TEXT    NULL,
-                row_version   BLOB    NOT NULL,
                 last_used_utc TEXT    NULL,
                 expires_utc   TEXT    NULL,
                 revoked_utc   TEXT    NULL,
-
+                created_utc   TEXT    NOT NULL 
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc   TEXT    NULL,
+                row_version   BLOB NOT NULL CHECK(length(row_version) = 16),
+            
                 CONSTRAINT uq_api_tokens_token_hash UNIQUE (token_hash),
                 FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS api_token_connection_logs
             (
-                id                 BLOB PRIMARY KEY,
-                public_id          BLOB    NOT NULL,
-                created_utc        TEXT    NOT NULL,
-                updated_utc        TEXT    NULL,
-                row_version        BLOB    NOT NULL,
-
-                api_token_id       BLOB    NULL,
+                id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                api_token_id       BLOB    NULL CHECK(api_token_id IS NULL OR length(api_token_id)=16),
                 token_name         TEXT    NOT NULL,
-                tenant_id          BLOB    NULL,
-                tenant_guid        TEXT    NULL,
+                tenant_id          BLOB    NULL CHECK(tenant_id IS NULL OR length(tenant_id)=16),
+                external_tenant_id BLOB NOT NULL CHECK(length(external_tenant_id) = 16),
                 tenant_name        TEXT    NOT NULL,
                 is_success         INTEGER NOT NULL DEFAULT 1,
                 error_message      TEXT    NULL,
@@ -78,48 +73,53 @@ namespace SCP.StorageFSC.Data.Schema
                 real_ip_raw        TEXT    NULL,
                 request_path       TEXT    NOT NULL,
                 user_agent         TEXT    NULL,
-
+                created_utc        TEXT    NOT NULL
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc        TEXT    NULL,
+                row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
+            
                 FOREIGN KEY (api_token_id) REFERENCES api_tokens(id) ON DELETE CASCADE,
                 FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL
             );
 
             CREATE TABLE IF NOT EXISTS stored_files
             (
-                id                 BLOB PRIMARY KEY,
-                public_id          BLOB    NOT NULL,
+                id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
                 sha256             TEXT    NOT NULL,
                 crc32              TEXT    NOT NULL,
                 file_size          INTEGER NOT NULL,
                 physical_path      TEXT    NOT NULL,
                 original_file_name TEXT    NOT NULL,
                 content_type       TEXT    NULL,
+                filestore_state_compress INTEGER NOT NULL DEFAULT 0,
                 reference_count    INTEGER NOT NULL DEFAULT 0,
-                created_utc        TEXT    NOT NULL,
-                updated_utc        TEXT    NULL,
-                row_version        BLOB    NOT NULL,
                 deleted_utc        TEXT    NULL,
                 is_deleted         INTEGER NOT NULL DEFAULT 0,
-
+                created_utc        TEXT    NOT NULL
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc        TEXT    NULL,
+                row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
+                        
                 CONSTRAINT uq_stored_files_sha256 UNIQUE (sha256),
                 CONSTRAINT uq_stored_files_physical_path UNIQUE (physical_path)
             );
 
             CREATE TABLE IF NOT EXISTS tenant_files
             (
-                id             BLOB PRIMARY KEY,
-                public_id      BLOB    NOT NULL,
-                tenant_id      INTEGER NOT NULL,
-                stored_file_id INTEGER NOT NULL,
-                file_guid      TEXT    NOT NULL,
+                id             BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                tenant_id      BLOB NOT NULL CHECK(length(tenant_id) = 16),
+                stored_file_id BLOB NOT NULL CHECK(length(stored_file_id) = 16),
+                file_guid      BLOB NOT NULL CHECK(length(file_guid) = 16),
                 file_name      TEXT    NOT NULL,
                 category       TEXT    NULL,
                 external_key   TEXT    NULL,
                 is_active      INTEGER NOT NULL DEFAULT 1,
-                created_utc    TEXT    NOT NULL,
-                updated_utc    TEXT    NULL,
-                row_version    BLOB    NOT NULL,
                 deleted_utc    TEXT    NULL,
-
+                created_utc    TEXT    NOT NULL
+                               DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc    TEXT    NULL,
+                row_version    BLOB NOT NULL CHECK(length(row_version) = 16),
+                        
                 CONSTRAINT uq_tenant_files_file_guid UNIQUE (file_guid),
                 FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
                 FOREIGN KEY (stored_file_id) REFERENCES stored_files(id) ON DELETE RESTRICT
@@ -127,55 +127,41 @@ namespace SCP.StorageFSC.Data.Schema
 
             CREATE TABLE IF NOT EXISTS multipart_upload_sessions
             (
-                id                         BLOB PRIMARY KEY,
-                public_id                  BLOB    NOT NULL,
-                created_utc                TEXT    NOT NULL,
-                updated_utc                TEXT    NULL,
-                row_version                BLOB    NOT NULL,
-
-                upload_id                  TEXT    NOT NULL,
-                tenant_id                  TEXT    NOT NULL,
-
+                id                         BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                upload_id                  BLOB NOT NULL CHECK(length(upload_id) = 16),
+                tenant_id                  BLOB NOT NULL CHECK(length(tenant_id) = 16),
                 original_file_name         TEXT    NOT NULL,
                 normalized_file_name       TEXT    NOT NULL,
                 extension                  TEXT    NOT NULL,
                 content_type               TEXT    NULL,
-
                 total_file_size            INTEGER NOT NULL,
                 part_size                  INTEGER NOT NULL,
                 total_parts                INTEGER NOT NULL,
-
                 expected_checksum_sha256   TEXT    NULL,
                 final_checksum_sha256      TEXT    NULL,
-
-                status                     INTEGER NOT NULL,
+                status                     INTEGER NOT NULL DEFAULT 0,
                 error_code                 TEXT    NULL,
                 error_message              TEXT    NULL,
                 failed_at_utc              TEXT    NULL,
-
                 storage_provider           TEXT    NOT NULL,
                 temp_storage_bucket        TEXT    NULL,
                 temp_storage_prefix        TEXT    NOT NULL,
-
                 completed_at_utc           TEXT    NULL,
                 expires_at_utc             TEXT    NULL,
-
-                stored_file_id             INTEGER NULL,
-
-                CONSTRAINT uq_multipart_upload_sessions_public_id UNIQUE (public_id),
+                stored_file_id             BLOB NULL CHECK(length(stored_file_id) = 16),
+                created_utc                TEXT    NOT NULL
+                                           DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc                TEXT    NULL,
+                row_version                BLOB NOT NULL CHECK(length(row_version) = 16),
+            
                 CONSTRAINT uq_multipart_upload_sessions_upload_id UNIQUE (upload_id)
             );
 
             CREATE TABLE IF NOT EXISTS multipart_upload_parts
             (
-                id                           BLOB PRIMARY KEY,
-                public_id                    BLOB    NOT NULL,
-                created_utc                  TEXT    NOT NULL,
-                updated_utc                  TEXT    NULL,
-                row_version                  BLOB    NOT NULL,
-
-                multipart_upload_session_id  INTEGER NOT NULL,
-                part_number                  INTEGER NOT NULL,
+                id                           BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                multipart_upload_session_id  BLOB NOT NULL CHECK(length(multipart_upload_session_id) = 16),
+                part_number                  INTEGER NOT NULL DEFAULT 0,
 
                 offset_bytes                 INTEGER NOT NULL,
                 size_in_bytes                INTEGER NOT NULL,
@@ -184,14 +170,18 @@ namespace SCP.StorageFSC.Data.Schema
                 checksum_sha256              TEXT    NULL,
                 provider_part_etag           TEXT    NULL,
 
-                status                       INTEGER NOT NULL,
+                status                       INTEGER NOT NULL DEFAULT 0,
 
                 uploaded_at_utc              TEXT    NULL,
                 error_message                TEXT    NULL,
                 retry_count                  INTEGER NOT NULL DEFAULT 0,
                 last_failed_at_utc           TEXT    NULL,
 
-                CONSTRAINT uq_multipart_upload_parts_public_id UNIQUE (public_id),
+                created_utc                TEXT    NOT NULL
+                                           DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc                TEXT    NULL,
+                row_version                BLOB NOT NULL CHECK(length(row_version) = 16),
+            
                 CONSTRAINT uq_multipart_upload_parts_session_part UNIQUE (multipart_upload_session_id, part_number),
 
                 FOREIGN KEY (multipart_upload_session_id)

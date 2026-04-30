@@ -1,5 +1,6 @@
 namespace SCP.StorageFSC.Data.Dto
 {
+    using SCP.StorageFSC.Data.Models;
 
     
 
@@ -22,6 +23,7 @@ namespace SCP.StorageFSC.Data.Dto
         public string? Category { get; set; }
         public string? ExternalKey { get; set; }
         public string? ContentType { get; set; }
+        public FilestoreStateCompress FilestoreStateCompress { get; set; }
         public long FileSize { get; set; }
         public string Sha256 { get; set; } = string.Empty;
         public string Crc32 { get; set; } = string.Empty;

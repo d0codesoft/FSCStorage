@@ -1,5 +1,8 @@
 using Dapper;
+using Microsoft.Data.Sqlite;
+using scp.filestorage.Data.Handlers;
 using SCP.StorageFSC.Data.Models;
+using System.Data;
 
 namespace SCP.StorageFSC.Data.Repositories
 {
@@ -12,14 +15,13 @@ namespace SCP.StorageFSC.Data.Repositories
             _connectionFactory = connectionFactory;
         }
 
-        public async Task<Guid> InsertAsync(Tenant tenant, CancellationToken cancellationToken = default)
+        public async Task<bool> InsertAsync(Tenant tenant, CancellationToken cancellationToken = default)
         {
             const string sql = """
                 INSERT INTO tenants
                 (
                     id,
-                    public_id,
-                    tenant_guid,
+                    external_tenant_id,
                     name,
                     is_active,
                     created_utc,
@@ -29,8 +31,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 VALUES
                 (
                     @Id,
-                    @PublicId,
-                    @TenantGuid,
+                    @ExternalTenantId,
                     @Name,
                     @IsActive,
                     @CreatedUtc,
@@ -39,24 +40,38 @@ namespace SCP.StorageFSC.Data.Repositories
                 );
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    tenant.Id,
-                    tenant.PublicId,
-                    TenantGuid = tenant.TenantGuid.ToString(),
-                    tenant.Name,
-                    IsActive = tenant.IsActive ? 1 : 0,
-                    tenant.CreatedUtc,
-                    tenant.UpdatedUtc,
-                    tenant.RowVersion
-                },
-                cancellationToken: cancellationToken));
+                var result = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Id = tenant.Id,
+                        ExternalTenantId = tenant.ExternalTenantId,
+                        tenant.Name,
+                        IsActive = tenant.IsActive ? 1 : 0,
+                        tenant.CreatedUtc,
+                        tenant.UpdatedUtc,
+                        RowVersion = tenant.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
 
-            return tenant.Id;
+                return result > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to insert tenant '{tenant.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to insert tenant '{tenant.Id}' due to database error.", ex);
+            }
         }
 
         public async Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -64,8 +79,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
                     created_utc AS CreatedUtc,
@@ -76,11 +90,26 @@ namespace SCP.StorageFSC.Data.Repositories
                 LIMIT 1;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
-            return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
-                sql,
-                new { Id = id },
-                cancellationToken: cancellationToken));
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by id '{id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by id '{id}' due to database error.", ex);
+            }
         }
 
         public async Task<Tenant?> GetByGuidAsync(Guid tenantGuid, CancellationToken cancellationToken = default)
@@ -88,23 +117,37 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
                 FROM tenants
-                WHERE tenant_guid = @TenantGuid
+                WHERE external_tenant_id = @TenantGuid
                 LIMIT 1;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
-            return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
-                sql,
-                new { TenantGuid = tenantGuid.ToString() },
-                cancellationToken: cancellationToken));
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    new { TenantGuid = tenantGuid },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by guid '{tenantGuid}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by guid '{tenantGuid}' due to database error.", ex);
+            }
         }
 
         public async Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
@@ -112,8 +155,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
                     created_utc AS CreatedUtc,
@@ -124,11 +166,26 @@ namespace SCP.StorageFSC.Data.Repositories
                 LIMIT 1;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
-            return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
-                sql,
-                new { Name = name },
-                cancellationToken: cancellationToken));
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    new { Name = name },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by name '{name}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant by name '{name}' due to database error.", ex);
+            }
         }
 
         public async Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -136,8 +193,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
                     created_utc AS CreatedUtc,
@@ -147,12 +203,27 @@ namespace SCP.StorageFSC.Data.Repositories
                 ORDER BY id;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
-            var rows = await connection.QueryAsync<Tenant>(new CommandDefinition(
-                sql,
-                cancellationToken: cancellationToken));
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var rows = await connection.QueryAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    cancellationToken: cancellationToken));
 
-            return rows.ToList();
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException("Failed to load tenants due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException("Failed to load tenants due to database error.", ex);
+            }
         }
 
         public async Task<bool> UpdateAsync(Tenant tenant, CancellationToken cancellationToken = default)
@@ -160,7 +231,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 UPDATE tenants
                 SET
-                    tenant_guid = @TenantGuid,
+                    external_tenant_id = @ExternalTenantId,
                     name = @Name,
                     is_active = @IsActive,
                     updated_utc = @UpdatedUtc,
@@ -168,36 +239,66 @@ namespace SCP.StorageFSC.Data.Repositories
                 WHERE id = @Id;
                 """;
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new
-                {
-                    tenant.Id,
-                    TenantGuid = tenant.TenantGuid.ToString(),
-                    tenant.Name,
-                    IsActive = tenant.IsActive ? 1 : 0,
-                    tenant.UpdatedUtc,
-                    tenant.RowVersion
-                },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        Id = tenant.Id,
+                        ExternalTenantId = tenant.ExternalTenantId,
+                        tenant.Name,
+                        IsActive = tenant.IsActive ? 1 : 0,
+                        tenant.UpdatedUtc,
+                        RowVersion = tenant.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to update tenant '{tenant.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to update tenant '{tenant.Id}' due to database error.", ex);
+            }
         }
 
         public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             const string sql = "DELETE FROM tenants WHERE id = @Id;";
 
-            using var connection = _connectionFactory.CreateConnection();
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
 
-            var affected = await connection.ExecuteAsync(new CommandDefinition(
-                sql,
-                new { Id = id },
-                cancellationToken: cancellationToken));
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new { Id = id },
+                    cancellationToken: cancellationToken));
 
-            return affected > 0;
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to delete tenant '{id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to delete tenant '{id}' due to database error.", ex);
+            }
         }
     }
 }

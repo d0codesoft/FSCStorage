@@ -1,6 +1,8 @@
-# SCP File Storage Service
+# FSC Storage Service
 
-Lightweight multi-tenant file storage service built with ASP.NET Core and SQLite. It stores uploaded files on disk, keeps file metadata in a local SQLite database, and exposes HTTP endpoints for tenant-based upload, download, listing, deletion, and administrative token management.
+FSC Storage is a simple HTTP service for storing files and deleting them by identifiers. It accepts uploaded files, saves the binary content on disk, keeps file metadata in a local SQLite database, and returns stable file identifiers that clients can use later to download, inspect, list, or delete files.
+
+The service is built with ASP.NET Core and is intended to be easy to run as a small standalone file storage component. It supports tenant-aware access, API-token authentication, content deduplication, and administrative endpoints for tenant and token management.
 
 ## Core Principles
 
@@ -126,6 +128,41 @@ The service reads configuration in this order:
 1. `appsettings.json`
 2. OS-specific settings file
 3. environment variables
+
+### Run as a Linux Service
+
+The repository includes scripts for installing FSC Storage as a Linux `systemd` service:
+
+- `scripts/install-fsc-storage.sh`: creates the service user and group, prepares application/data/log directories, installs the systemd unit and environment file, reloads systemd, and enables the service.
+- `scripts/fsc-storage.service`: systemd unit file that runs the published ASP.NET Core application from `/opt/fsc-storage`.
+- `scripts/fsc-storage-env`: environment file used by the service to configure storage and log paths.
+
+Typical Linux deployment flow:
+
+```bash
+./scripts/publish-all.sh
+sudo ./scripts/install-fsc-storage.sh
+sudo cp -r publish/linux-x64/* /opt/fsc-storage/
+sudo systemctl start fsc-storage.service
+sudo systemctl status fsc-storage.service
+```
+
+The installer configures:
+
+- service name: `fsc-storage.service`
+- service user/group: `fstore`
+- application directory: `/opt/fsc-storage`
+- metadata/data directory: `/var/lib/fsc-storage`
+- file content directory: `/var/lib/fsc-storage/data`
+- log directory: `/var/log/fsc-storage`
+
+After installation, the service can be managed with standard systemd commands:
+
+```bash
+sudo systemctl restart fsc-storage.service
+sudo systemctl stop fsc-storage.service
+sudo journalctl -u fsc-storage.service -f
+```
 
 ## Basic Usage
 

@@ -40,18 +40,18 @@ namespace SCP.StorageFSC.Services
 
             var entity = new Tenant
             {
-                TenantGuid = Guid.NewGuid(),
+                ExternalTenantId = Guid.NewGuid(),
                 Name = request.Name.Trim(),
                 IsActive = true,
                 CreatedUtc = DateTime.UtcNow
             };
 
-            entity.Id = await _tenantRepository.InsertAsync(entity, cancellationToken);
+            _ = await _tenantRepository.InsertAsync(entity, cancellationToken);
 
             _logger.LogInformation(
                 "Tenant created. TenantId={TenantId}, TenantGuid={TenantGuid}, Name={TenantName}",
                 entity.Id,
-                entity.TenantGuid,
+                entity.ExternalTenantId,
                 entity.Name);
 
             return MapTenant(entity);
@@ -100,7 +100,6 @@ namespace SCP.StorageFSC.Services
                 return true;
 
             tenant.IsActive = false;
-            tenant.UpdatedUtc = DateTime.UtcNow;
 
             var updated = await _tenantRepository.UpdateAsync(tenant, cancellationToken);
 
@@ -109,7 +108,7 @@ namespace SCP.StorageFSC.Services
                 _logger.LogInformation(
                     "Tenant disabled. TenantId={TenantId}, TenantGuid={TenantGuid}",
                     tenant.Id,
-                    tenant.TenantGuid);
+                    tenant.ExternalTenantId);
             }
 
             return updated;
@@ -146,7 +145,7 @@ namespace SCP.StorageFSC.Services
                 ExpiresUtc = request.ExpiresUtc
             };
 
-            entity.Id = await _apiTokenRepository.InsertAsync(entity, cancellationToken);
+            _ = await _apiTokenRepository.InsertAsync(entity, cancellationToken);
 
             _logger.LogInformation(
                 "API token created. TokenId={TokenId}, TenantId={TenantId}, IsAdmin={IsAdmin}, Prefix={TokenPrefix}",
@@ -221,7 +220,7 @@ namespace SCP.StorageFSC.Services
             return new TenantDto
             {
                 Id = tenant.Id,
-                TenantGuid = tenant.TenantGuid,
+                TenantGuid = tenant.ExternalTenantId,
                 Name = tenant.Name,
                 IsActive = tenant.IsActive,
                 CreatedUtc = tenant.CreatedUtc,

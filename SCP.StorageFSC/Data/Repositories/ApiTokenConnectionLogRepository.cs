@@ -18,14 +18,10 @@ namespace SCP.StorageFSC.Data.Repositories
                 INSERT INTO api_token_connection_logs
                 (
                     id,
-                    public_id,
-                    created_utc,
-                    updated_utc,
-                    row_version,
                     api_token_id,
                     token_name,
                     tenant_id,
-                    tenant_guid,
+                    external_tenant_id,
                     tenant_name,
                     is_success,
                     error_message,
@@ -35,19 +31,18 @@ namespace SCP.StorageFSC.Data.Repositories
                     forwarded_for_raw,
                     real_ip_raw,
                     request_path,
-                    user_agent
+                    user_agent,
+                    created_utc,
+                    updated_utc,
+                    row_version
                 )
                 VALUES
                 (
                     @Id,
-                    @PublicId,
-                    @CreatedUtc,
-                    @UpdatedUtc,
-                    @RowVersion,
                     @ApiTokenId,
                     @TokenName,
                     @TenantId,
-                    @TenantGuid,
+                    @ExternalTenantId,
                     @TenantName,
                     @IsSuccess,
                     @ErrorMessage,
@@ -57,25 +52,24 @@ namespace SCP.StorageFSC.Data.Repositories
                     @ForwardedForRaw,
                     @RealIpRaw,
                     @RequestPath,
-                    @UserAgent
+                    @UserAgent,
+                    @CreatedUtc,
+                    @UpdatedUtc,
+                    @RowVersion
                 );
                 """;
 
             using var connection = _connectionFactory.CreateConnection();
 
-            await connection.ExecuteAsync(new CommandDefinition(
+            var result = await connection.ExecuteAsync(new CommandDefinition(
                 sql,
                 new
                 {
                     log.Id,
-                    log.PublicId,
-                    log.CreatedUtc,
-                    log.UpdatedUtc,
-                    log.RowVersion,
                     log.ApiTokenId,
                     log.TokenName,
                     log.TenantId,
-                    TenantGuid = log.TenantGuid?.ToString(),
+                    ExternalTenantId = log.ExternalTenantId,
                     log.TenantName,
                     IsSuccess = log.IsSuccess ? 1 : 0,
                     log.ErrorMessage,
@@ -85,9 +79,18 @@ namespace SCP.StorageFSC.Data.Repositories
                     log.ForwardedForRaw,
                     log.RealIpRaw,
                     log.RequestPath,
-                    log.UserAgent
+                    log.UserAgent,
+                    log.CreatedUtc,
+                    log.UpdatedUtc,
+                    log.RowVersion
                 },
                 cancellationToken: cancellationToken));
+            
+            if (result == 0)
+            {
+                throw new Exception("Failed to insert API token connection log.");
+            }
+
 
             return log.Id;
         }
@@ -97,14 +100,10 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    created_utc AS CreatedUtc,
-                    updated_utc AS UpdatedUtc,
-                    row_version AS RowVersion,
                     api_token_id AS ApiTokenId,
                     token_name AS TokenName,
                     tenant_id AS TenantId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     tenant_name AS TenantName,
                     is_success AS IsSuccess,
                     error_message AS ErrorMessage,
@@ -114,7 +113,10 @@ namespace SCP.StorageFSC.Data.Repositories
                     forwarded_for_raw AS ForwardedForRaw,
                     real_ip_raw AS RealIpRaw,
                     request_path AS RequestPath,
-                    user_agent AS UserAgent
+                    user_agent AS UserAgent,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
                 FROM api_token_connection_logs
                 WHERE id = @Id
                 LIMIT 1;
@@ -132,14 +134,10 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    created_utc AS CreatedUtc,
-                    updated_utc AS UpdatedUtc,
-                    row_version AS RowVersion,
                     api_token_id AS ApiTokenId,
                     token_name AS TokenName,
                     tenant_id AS TenantId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     tenant_name AS TenantName,
                     is_success AS IsSuccess,
                     error_message AS ErrorMessage,
@@ -149,7 +147,10 @@ namespace SCP.StorageFSC.Data.Repositories
                     forwarded_for_raw AS ForwardedForRaw,
                     real_ip_raw AS RealIpRaw,
                     request_path AS RequestPath,
-                    user_agent AS UserAgent
+                    user_agent AS UserAgent,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
                 FROM api_token_connection_logs
                 WHERE api_token_id = @ApiTokenId
                 ORDER BY created_utc DESC
@@ -174,14 +175,10 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    created_utc AS CreatedUtc,
-                    updated_utc AS UpdatedUtc,
-                    row_version AS RowVersion,
                     api_token_id AS ApiTokenId,
                     token_name AS TokenName,
                     tenant_id AS TenantId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     tenant_name AS TenantName,
                     is_success AS IsSuccess,
                     error_message AS ErrorMessage,
@@ -191,7 +188,10 @@ namespace SCP.StorageFSC.Data.Repositories
                     forwarded_for_raw AS ForwardedForRaw,
                     real_ip_raw AS RealIpRaw,
                     request_path AS RequestPath,
-                    user_agent AS UserAgent
+                    user_agent AS UserAgent,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
                 FROM api_token_connection_logs
                 WHERE tenant_id = @TenantId
                 ORDER BY created_utc DESC
@@ -223,7 +223,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     api_token_id AS ApiTokenId,
                     token_name AS TokenName,
                     tenant_id AS TenantId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     tenant_name AS TenantName,
                     is_success AS IsSuccess,
                     error_message AS ErrorMessage,
@@ -253,14 +253,10 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
-                    created_utc AS CreatedUtc,
-                    updated_utc AS UpdatedUtc,
-                    row_version AS RowVersion,
                     api_token_id AS ApiTokenId,
                     token_name AS TokenName,
                     tenant_id AS TenantId,
-                    tenant_guid AS TenantGuid,
+                    external_tenant_id AS ExternalTenantId,
                     tenant_name AS TenantName,
                     is_success AS IsSuccess,
                     error_message AS ErrorMessage,
@@ -270,7 +266,10 @@ namespace SCP.StorageFSC.Data.Repositories
                     forwarded_for_raw AS ForwardedForRaw,
                     real_ip_raw AS RealIpRaw,
                     request_path AS RequestPath,
-                    user_agent AS UserAgent
+                    user_agent AS UserAgent,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
                 FROM api_token_connection_logs
                 WHERE is_success = 0
                 ORDER BY created_utc DESC

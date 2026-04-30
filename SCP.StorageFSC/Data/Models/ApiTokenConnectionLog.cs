@@ -23,7 +23,7 @@ namespace SCP.StorageFSC.Data.Models
         /// <summary>
         /// External tenant GUID resolved for the request.
         /// </summary>
-        public Guid? TenantGuid { get; set; }
+        public Guid? ExternalTenantId { get; set; }
 
         /// <summary>
         /// Tenant name snapshot at the time of connection.
@@ -81,7 +81,7 @@ namespace SCP.StorageFSC.Data.Models
             var admin = IsAdmin ? "Admin" : "Tenant";
             var token = string.IsNullOrWhiteSpace(TokenName) ? ApiTokenId?.ToString() ?? "Unknown" : TokenName;
             var tenant = string.IsNullOrWhiteSpace(TenantName)
-                ? TenantGuid?.ToString() ?? TenantId?.ToString() ?? "None"
+                ? ExternalTenantId?.ToString() ?? TenantId?.ToString() ?? "None"
                 : TenantName;
             var error = ErrorMessage ?? "None";
 

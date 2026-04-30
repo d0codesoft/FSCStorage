@@ -50,6 +50,8 @@ namespace scp.filestorage.Controllers
         }
 
         [HttpPut("{uploadId:guid}/parts/{partNumber:int}")]
+        [RequestSizeLimit(long.MaxValue)]
+        [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         [ProducesResponseType(typeof(UploadMultipartPartResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -116,6 +118,8 @@ namespace scp.filestorage.Controllers
         /// - file
         /// </summary>
         [HttpPost("part")]
+        [RequestSizeLimit(long.MaxValue)]
+        [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         [ProducesResponseType(typeof(UploadMultipartPartResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
