@@ -1,0 +1,473 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<Package
+	  Name="FSC Storage Service"
+	  Manufacturer="SCP"
+	  Version="$(var.ProductVersion)"
+	  UpgradeCode="{2F26E8C4-7D37-48F8-9635-45683C7D53E5}"
+	  Codepage="65001"
+	  Scope="perMachine">
+
+		<MajorUpgrade DowngradeErrorMessage="A newer version of FSC Storage Service is already installed." />
+		<MediaTemplate EmbedCab="yes" />
+		<Launch Condition="Privileged" Message="Для установки FSC Storage Service требуются права администратора." />
+
+		<!--
+        Standard WixUI_InstallDir UI.
+        The custom ServiceAccountDlg is inserted between InstallDirDlg and VerifyReadyDlg below.
+        -->
+		<ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+		<WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)assets\license.rtf" />
+		<WixVariable Id="WixUIDialogBmp" Value="$(sys.SOURCEFILEDIR)assets\dialog.png" />
+		<WixVariable Id="WixUIBannerBmp" Value="$(sys.SOURCEFILEDIR)assets\banner.png" />
+
+		<!-- Service installation properties. Public properties are uppercase. -->
+		<Property Id="INSTALL_AS_SERVICE" Value="1" Secure="yes" />
+
+		<!-- SYSTEM / EXISTING / CREATE -->
+		<Property Id="SERVICE_ACCOUNT_MODE" Value="SYSTEM" Secure="yes" />
+
+		<Property Id="SERVICEACCOUNT" Value="LocalSystem" Secure="yes" />
+		<Property Id="SERVICEPASSWORD" Secure="yes" Hidden="yes" />
+
+		<Property Id="SERVICE_EXISTING_USER" Secure="yes" />
+		<Property Id="SERVICE_EXISTING_PASSWORD" Secure="yes" Hidden="yes" />
+
+		<Property Id="SERVICE_CREATE_USER" Value="FSC_USER" Secure="yes" />
+		<Property Id="SERVICE_CREATE_PASSWORD" Secure="yes" Hidden="yes" />
+		<Property Id="SERVICE_CREATE_PASSWORD_CONFIRM" Secure="yes" Hidden="yes" />
+
+		<UI>
+			<!-- Insert custom dialog after installation folder selection. -->
+			<Publish Dialog="InstallDirDlg"
+					 Control="Next"
+					 Event="NewDialog"
+					 Value="ServiceAccountDlg"
+					 Order="5"
+					 Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+
+			<!-- Return from VerifyReadyDlg to the custom service account dialog. -->
+			<Publish Dialog="VerifyReadyDlg"
+					 Control="Back"
+					 Event="NewDialog"
+					 Value="ServiceAccountDlg"
+					 Order="1"
+					 Condition="NOT Installed" />
+		</UI>
+
+		<StandardDirectory Id="ProgramFiles64Folder">
+			<Directory Id="INSTALLFOLDER" Name="FSCStorage" />
+		</StandardDirectory>
+
+		<Feature Id="MainFeature" Title="FSC Storage Service" Level="1">
+			<ComponentRef Id="ServiceComponent" />
+			<ComponentRef Id="FscStorageServiceUserComponent" />
+			<ComponentGroupRef Id="PublishedFiles" />
+		</Feature>
+	</Package>
+
+	<Fragment>
+		<ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
+			<Files Include="$(var.PublishDir)\**">
+				<Exclude Files="$(var.PublishDir)\scp.filestorage.exe" />
+			</Files>
+		</ComponentGroup>
+
+		<!--
+      Service component is installed only when INSTALL_AS_SERVICE=1.
+      The service executable is excluded from PublishedFiles and installed here as the service component key path.
+    -->
+		<Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="*" Condition='INSTALL_AS_SERVICE="1"'>
+			<File Id="ServiceExecutable" Source="$(var.PublishDir)\scp.filestorage.exe" KeyPath="yes" />
+
+			<ServiceInstall
+			  Id="FscStorageServiceInstall"
+			  Type="ownProcess"
+			  Name="fsc-storage"
+			  DisplayName="FSC Storage Service"
+			  Description="SCP File Storage Service"
+			  Start="auto"
+			  ErrorControl="normal"
+			  Account="[SERVICEACCOUNT]"
+			  Password="[SERVICEPASSWORD]">
+				<util:ServiceConfig
+				  FirstFailureActionType="restart"
+				  SecondFailureActionType="restart"
+				  ThirdFailureActionType="none"
+				  ResetPeriodInDays="1"
+				  RestartServiceDelayInSeconds="10" />
+			</ServiceInstall>
+
+			<ServiceControl
+			  Id="FscStorageServiceControl"
+			  Name="fsc-storage"
+			  Start="install"
+			  Stop="both"
+			  Remove="uninstall"
+			  Wait="yes" />
+		</Component>
+
+		<!--
+      Local Windows user FSC_USER is created only when the installer is configured
+      to run the service under a newly created local user account.
+    -->
+		<Component Id="FscStorageServiceUserComponent" Directory="INSTALLFOLDER" Guid="{8D7D44D9-6E0C-4C3E-8E69-B9AB358017EF}" Condition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"'>
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="FscStorageServiceUserComponent"
+			  Type="integer"
+			  Value="1"
+			  KeyPath="yes" />
+
+			<util:User
+			  Id="FscStorageServiceUser"
+			  Name="[SERVICE_CREATE_USER]"
+			  Password="[SERVICE_CREATE_PASSWORD]"
+			  CreateUser="yes"
+			  UpdateIfExists="yes"
+			  LogonAsService="yes"
+			  RemoveOnUninstall="no" />
+		</Component>
+	</Fragment>
+
+	<Fragment>
+		<UI>
+			<Dialog Id="ServiceAccountDlg"
+					Width="370"
+					Height="270"
+					Title="FSC Storage Service">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="15"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Установка файлового сервера FSC Storage" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="15"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Установите файловый сервер FSC Storage как сервис Windows." />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="InstallAsService"
+						 Type="CheckBox"
+						 X="20"
+						 Y="60"
+						 Width="330"
+						 Height="17"
+						 Property="INSTALL_AS_SERVICE"
+						 CheckBoxValue="1"
+						 Text="Установить файловый сервер как сервис" />
+
+				<Control Id="ServiceModeGroup"
+						 Type="RadioButtonGroup"
+						 X="35"
+						 Y="90"
+						 Width="310"
+						 Height="75"
+						 Property="SERVICE_ACCOUNT_MODE"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"'>
+					<RadioButtonGroup Property="SERVICE_ACCOUNT_MODE">
+						<RadioButton Value="SYSTEM"
+									 X="0"
+									 Y="0"
+									 Width="280"
+									 Height="17"
+									 Text="Системная служба" />
+
+						<RadioButton Value="EXISTING"
+									 X="0"
+									 Y="25"
+									 Width="165"
+									 Height="17"
+									 Text="Существующий пользователь:" />
+
+						<RadioButton Value="CREATE"
+									 X="0"
+									 Y="50"
+									 Width="280"
+									 Height="17"
+									 Text="Создать пользователя FSC_USER" />
+					</RadioButtonGroup>
+				</Control>
+
+				<Control Id="ExistingUserEdit"
+						 Type="Edit"
+						 X="210"
+						 Y="113"
+						 Width="125"
+						 Height="18"
+						 Property="SERVICE_EXISTING_USER"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"EXISTING"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="EXISTING"' />
+
+				<Control Id="PasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="180"
+						 Width="110"
+						 Height="15"
+						 Text="Пароль:"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE="SYSTEM"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE&lt;&gt;"SYSTEM"' />
+
+				<Control Id="PasswordEditExisting"
+						 Type="Edit"
+						 X="150"
+						 Y="177"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_EXISTING_PASSWORD"
+						 Password="yes"
+						 HideCondition='SERVICE_ACCOUNT_MODE&lt;&gt;"EXISTING"'
+						 ShowCondition='SERVICE_ACCOUNT_MODE="EXISTING"'
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
+				<Control Id="PasswordEditCreate"
+						 Type="Edit"
+						 X="150"
+						 Y="177"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_CREATE_PASSWORD"
+						 Password="yes"
+						 HideCondition='SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 ShowCondition='SERVICE_ACCOUNT_MODE="CREATE"'
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
+				<Control Id="ConfirmPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="207"
+						 Width="110"
+						 Height="15"
+						 Text="Подтвердите пароль:"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"' />
+
+				<Control Id="ConfirmPasswordEdit"
+						 Type="Edit"
+						 X="150"
+						 Y="204"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_CREATE_PASSWORD_CONFIRM"
+						 Password="yes"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"' />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="InstallDirDlg" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+
+					<!-- Service is not installed. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="LocalSystem"
+							 Order="1"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Order="2"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+
+					<!-- LocalSystem. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="LocalSystem"
+							 Order="3"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Order="4"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+
+					<!-- Existing user. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="[SERVICE_EXISTING_USER]"
+							 Order="5"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Value="[SERVICE_EXISTING_PASSWORD]"
+							 Order="6"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot;" />
+
+					<!-- Create local FSC_USER. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value=".\FSC_USER"
+							 Order="7"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Value="[SERVICE_CREATE_PASSWORD]"
+							 Order="8"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot;" />
+
+					<!-- Validation dialogs. -->
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServiceAccountDlg"
+							 Order="20"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_USER=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordDlg"
+							 Order="21"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordDlg"
+							 Order="22"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordConfirmDlg"
+							 Order="23"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD&lt;&gt;SERVICE_CREATE_PASSWORD_CONFIRM" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="30"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="31"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="32"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_USER&lt;&gt;&quot;&quot; AND SERVICE_EXISTING_PASSWORD&lt;&gt;&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="33"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD&lt;&gt;&quot;&quot; AND SERVICE_CREATE_PASSWORD=SERVICE_CREATE_PASSWORD_CONFIRM" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServiceAccountDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите имя существующего пользователя." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServicePasswordDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите пароль пользователя." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServicePasswordConfirmDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Пароль и подтверждение пароля не совпадают." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+		</UI>
+	</Fragment>
+</Wix>

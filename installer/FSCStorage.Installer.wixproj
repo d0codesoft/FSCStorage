@@ -1,0 +1,22 @@
+﻿<Project Sdk="WixToolset.Sdk/7.0.0">
+  <PropertyGroup>
+    <OutputName>FSCStorage</OutputName>
+    <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
+    <Cultures>en-US;uk-UA</Cultures>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+    <PublishRuntime Condition="'$(PublishRuntime)' == ''">win-x64</PublishRuntime>
+    <PublishOutput>$(MSBuildThisFileDirectory)..\publish\$(PublishRuntime)</PublishOutput>
+    <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishOutput)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="7.0.0" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="7.0.0" />
+  </ItemGroup>
+  <Target Name="PublishFscStorage" BeforeTargets="BeforeBuild">
+    <RemoveDir Directories="$(PublishOutput)" />
+    <MakeDir Directories="$(PublishOutput)" />
+    <Exec WorkingDirectory="$(MSBuildThisFileDirectory).." Command="dotnet publish &quot;SCP.StorageFSC\scp.filestorage.csproj&quot; --configuration &quot;$(Configuration)&quot; --runtime &quot;$(PublishRuntime)&quot; --self-contained true --output &quot;$(PublishOutput)&quot; /p:PublishSingleFile=false" />
+    <Exec WorkingDirectory="$(MSBuildThisFileDirectory).." Command="dotnet publish &quot;fsc_adm_cli\fsc_adm_cli.csproj&quot; --configuration &quot;$(Configuration)&quot; --runtime &quot;$(PublishRuntime)&quot; --self-contained true --output &quot;$(PublishOutput)&quot; /p:PublishSingleFile=false" />
+  </Target>
+</Project>

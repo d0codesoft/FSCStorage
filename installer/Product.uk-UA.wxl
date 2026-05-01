@@ -1,0 +1,9 @@
+<WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="uk-UA">
+  <String Id="WelcomeDlgDescription" Value="Цей майстер інсталює FSC Storage Service: файлове сховище з HTTP API, фоновими завданнями обслуговування та адміністративною CLI-утилітою. Натисніть Далі, щоб продовжити інсталяцію." />
+  <String Id="LicenseAgreementDlgDescription" Value="Перед інсталяцією FSC Storage Service уважно прочитайте умови ліцензійної угоди." />
+  <String Id="msierrUSRFailedUserCreate" Value="Не вдалося створити користувача. ([2] [3] [4] [5])" />
+  <String Id="msierrUSRFailedUserCreatePswd" Value="Не вдалося створити користувача через недійсний пароль. ([2] [3] [4] [5])" />
+  <String Id="msierrUSRFailedUserGroupAdd" Value="Не вдалося додати користувача до групи. ([2] [3] [4] [5])" />
+  <String Id="msierrUSRFailedGrantLogonAsService" Value="Не вдалося надати користувачу право входу як служба. ([2] [3] [4] [5])" />
+  <String Id="msierrUSRFailedUserCreateExists" Value="Не вдалося створити користувача, оскільки він уже існує. ([2] [3] [4] [5])" />
+</WixLocalization>

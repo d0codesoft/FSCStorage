@@ -1,0 +1,4 @@
+<WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="en-US">
+  <String Id="WelcomeDlgDescription" Value="This wizard will install FSC Storage Service: file storage with an HTTP API, background maintenance tasks, and an administrative CLI utility. Click Next to continue the installation." />
+  <String Id="LicenseAgreementDlgDescription" Value="Please read the license agreement carefully before installing FSC Storage Service." />
+</WixLocalization>

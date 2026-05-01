@@ -1,6 +1,8 @@
-#Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
+    [ValidateSet("Install", "Remove")]
+    [string] $Action,
+
     [string] $ServiceName = "fsc-storage",
     [string] $DisplayName = "FSC Storage",
     [string] $Description = "SCP File Storage Service",
@@ -31,10 +33,142 @@ function Fail {
     throw $Message
 }
 
+function Show-Usage {
+    $scriptName = Split-Path -Leaf $PSCommandPath
+
+    Write-Host "FSC Storage Windows service installer"
+    Write-Host ""
+    Write-Host "Usage:"
+    Write-Host "  .\$scriptName -Action Install -Password <SecureString> [options]"
+    Write-Host "  .\$scriptName -Action Remove [options]"
+    Write-Host ""
+    Write-Host "Common parameters:"
+    Write-Host "  -Action        Install or Remove. Required."
+    Write-Host "  -ServiceName   Windows service name. Default: fsc-storage"
+    Write-Host "  -UserName      Local service user name. Default: fstore"
+    Write-Host "  -Password      Service user password as SecureString."
+    Write-Host "  -AppDirectory  Directory containing scp.filestorage.dll."
+    Write-Host "  -BasePath      Metadata/database directory."
+    Write-Host "  -LogsPath      Log directory."
+    Write-Host "  -DataPath      File data directory."
+    Write-Host "  -Url           ASP.NET Core listen URL. Default: http://0.0.0.0:5000"
+    Write-Host "  -StartService  Start the service after installation."
+    Write-Host ""
+    Write-Host "Examples:"
+    Write-Host "  `$pwd = Read-Host `"Service user password`" -AsSecureString"
+    Write-Host "  .\$scriptName -Action Install -Password `$pwd -AppDirectory `"C:\Program Files\FSCStorage`" -StartService"
+    Write-Host "  .\$scriptName -Action Remove -ServiceName `"fsc-storage`""
+}
+
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Initialize-LsaRightsApi {
+    if ("FscStorage.LsaRights" -as [type]) {
+        return
+    }
+
+    Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+namespace FscStorage
+{
+    public static class LsaRights
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LSA_UNICODE_STRING
+        {
+            public UInt16 Length;
+            public UInt16 MaximumLength;
+            public IntPtr Buffer;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LSA_OBJECT_ATTRIBUTES
+        {
+            public UInt32 Length;
+            public IntPtr RootDirectory;
+            public IntPtr ObjectName;
+            public UInt32 Attributes;
+            public IntPtr SecurityDescriptor;
+            public IntPtr SecurityQualityOfService;
+        }
+
+        [DllImport("advapi32.dll", SetLastError = true, PreserveSig = true)]
+        private static extern UInt32 LsaOpenPolicy(
+            IntPtr systemName,
+            ref LSA_OBJECT_ATTRIBUTES objectAttributes,
+            UInt32 desiredAccess,
+            out IntPtr policyHandle);
+
+        [DllImport("advapi32.dll", PreserveSig = true)]
+        private static extern UInt32 LsaAddAccountRights(
+            IntPtr policyHandle,
+            byte[] accountSid,
+            LSA_UNICODE_STRING[] userRights,
+            UInt32 countOfRights);
+
+        [DllImport("advapi32.dll", PreserveSig = true)]
+        private static extern UInt32 LsaClose(IntPtr policyHandle);
+
+        [DllImport("advapi32.dll")]
+        private static extern UInt32 LsaNtStatusToWinError(UInt32 status);
+
+        public static void AddAccountRight(byte[] sidBytes, string rightName)
+        {
+            const UInt32 POLICY_LOOKUP_NAMES = 0x00000800;
+            const UInt32 POLICY_CREATE_ACCOUNT = 0x00000010;
+
+            var objectAttributes = new LSA_OBJECT_ATTRIBUTES();
+            objectAttributes.Length = (UInt32)Marshal.SizeOf(typeof(LSA_OBJECT_ATTRIBUTES));
+
+            IntPtr policyHandle;
+            UInt32 status = LsaOpenPolicy(
+                IntPtr.Zero,
+                ref objectAttributes,
+                POLICY_LOOKUP_NAMES | POLICY_CREATE_ACCOUNT,
+                out policyHandle);
+
+            if (status != 0)
+            {
+                throw new InvalidOperationException("LsaOpenPolicy failed. Win32Error=" + LsaNtStatusToWinError(status));
+            }
+
+            IntPtr rightBuffer = IntPtr.Zero;
+
+            try
+            {
+                rightBuffer = Marshal.StringToHGlobalUni(rightName);
+                var right = new LSA_UNICODE_STRING
+                {
+                    Buffer = rightBuffer,
+                    Length = (UInt16)(rightName.Length * 2),
+                    MaximumLength = (UInt16)((rightName.Length + 1) * 2)
+                };
+
+                status = LsaAddAccountRights(policyHandle, sidBytes, new[] { right }, 1);
+                if (status != 0)
+                {
+                    throw new InvalidOperationException("LsaAddAccountRights failed for " + rightName + ". Win32Error=" + LsaNtStatusToWinError(status));
+                }
+            }
+            finally
+            {
+                if (rightBuffer != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(rightBuffer);
+                }
+
+                LsaClose(policyHandle);
+            }
+        }
+    }
+}
+"@
 }
 
 function New-RandomPassword {
@@ -69,6 +203,16 @@ function Get-LocalAccountName {
 function Get-AccountSid {
     param([string] $AccountName)
 
+    if ($AccountName -match "^\.\\(?<LocalName>.+)$") {
+        $localUser = Get-LocalUser -Name $Matches.LocalName -ErrorAction Stop
+        return $localUser.SID.Value
+    }
+
+    if ($AccountName -notmatch "^[^\\]+\\[^\\]+$") {
+        $localUser = Get-LocalUser -Name $AccountName -ErrorAction Stop
+        return $localUser.SID.Value
+    }
+
     $ntAccount = [Security.Principal.NTAccount]::new($AccountName)
     return $ntAccount.Translate([Security.Principal.SecurityIdentifier]).Value
 }
@@ -76,63 +220,32 @@ function Get-AccountSid {
 function Grant-LogOnAsService {
     param([string] $AccountName)
 
-    Write-Step "Granting 'Log on as a service' to '$AccountName'."
+    Add-AccountToUserRight -AccountName $AccountName -RightName "SeServiceLogonRight" -Description "Log on as a service"
+}
+
+function Deny-InteractiveLogon {
+    param([string] $AccountName)
+
+    Add-AccountToUserRight -AccountName $AccountName -RightName "SeDenyInteractiveLogonRight" -Description "Deny log on locally"
+    Add-AccountToUserRight -AccountName $AccountName -RightName "SeDenyRemoteInteractiveLogonRight" -Description "Deny log on through Remote Desktop Services"
+}
+
+function Add-AccountToUserRight {
+    param(
+        [string] $AccountName,
+        [string] $RightName,
+        [string] $Description
+    )
+
+    Write-Step "Granting '$Description' to '$AccountName'."
 
     $sid = Get-AccountSid -AccountName $AccountName
-    $tempRoot = Join-Path $env:TEMP "fsc-storage-service-rights-$([Guid]::NewGuid().ToString('N'))"
-    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    $sidObject = [Security.Principal.SecurityIdentifier]::new($sid)
+    $sidBytes = New-Object byte[] $sidObject.BinaryLength
+    $sidObject.GetBinaryForm($sidBytes, 0)
 
-    $exportFile = Join-Path $tempRoot "export.inf"
-    $importFile = Join-Path $tempRoot "import.inf"
-    $dbFile = Join-Path $tempRoot "rights.sdb"
-
-    try {
-        secedit.exe /export /cfg $exportFile | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to export local security policy."
-        }
-
-        $content = Get-Content -LiteralPath $exportFile
-        $rightName = "SeServiceLogonRight"
-        $rightLine = $content | Where-Object { $_ -like "$rightName = *" } | Select-Object -First 1
-        $sidToken = "*$sid"
-
-        if ($rightLine) {
-            $current = ($rightLine -replace "^$rightName\s*=\s*", "").Split(",") |
-                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
-
-            if ($current -contains $sidToken) {
-                Write-Step "The account already has 'Log on as a service'."
-                return
-            }
-
-            $newLine = "$rightName = " + (($current + $sidToken) -join ",")
-            $content = $content | ForEach-Object {
-                if ($_ -like "$rightName = *") { $newLine } else { $_ }
-            }
-        }
-        else {
-            $newLine = "$rightName = $sidToken"
-            $privilegeIndex = [Array]::IndexOf($content, "[Privilege Rights]")
-            if ($privilegeIndex -ge 0) {
-                $before = $content[0..$privilegeIndex]
-                $after = $content[($privilegeIndex + 1)..($content.Length - 1)]
-                $content = @($before + $newLine + $after)
-            }
-            else {
-                $content = @($content + "[Privilege Rights]" + $newLine)
-            }
-        }
-
-        Set-Content -LiteralPath $importFile -Value $content -Encoding Unicode
-        secedit.exe /configure /db $dbFile /cfg $importFile /areas USER_RIGHTS | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Fail "Failed to update local security policy."
-        }
-    }
-    finally {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Initialize-LsaRightsApi
+    [FscStorage.LsaRights]::AddAccountRight($sidBytes, $RightName)
 }
 
 function Ensure-ServiceUser {
@@ -144,10 +257,13 @@ function Ensure-ServiceUser {
     $existing = Get-LocalUser -Name $Name -ErrorAction SilentlyContinue
 
     if ($existing) {
-        Write-Step "User '$Name' already exists."
+        Write-Step "User '$Name' already exists. Skipping user creation."
 
         if (-not $SecurePassword) {
-            Fail "User '$Name' already exists. Provide -Password so the Windows service can be registered with this account."
+            Write-Step "No password was provided. Generating a new password for the existing service account."
+            $plainPassword = New-RandomPassword
+            $SecurePassword = ConvertTo-SecureString $plainPassword -AsPlainText -Force
+            Set-LocalUser -Name $Name -Password $SecurePassword
         }
     }
     else {
@@ -168,6 +284,7 @@ function Ensure-ServiceUser {
 
     $accountName = Get-LocalAccountName -Name $Name
     Grant-LogOnAsService -AccountName $accountName
+    Deny-InteractiveLogon -AccountName $accountName
 
     return [PSCredential]::new($accountName, $SecurePassword)
 }
@@ -183,10 +300,11 @@ function Ensure-Directory {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
 
     $acl = Get-Acl -LiteralPath $Path
+    $accountSid = [Security.Principal.SecurityIdentifier]::new((Get-AccountSid -AccountName $AccountName))
     $inheritanceFlags = [Security.AccessControl.InheritanceFlags]"ContainerInherit,ObjectInherit"
     $propagationFlags = [Security.AccessControl.PropagationFlags]"None"
     $accessRule = [Security.AccessControl.FileSystemAccessRule]::new(
-        $AccountName,
+        $accountSid,
         $Rights,
         $inheritanceFlags,
         $propagationFlags,
@@ -301,8 +419,45 @@ function Validate-Installation {
     Remove-Item -LiteralPath $testFile -Force -ErrorAction SilentlyContinue
 }
 
+function Remove-WindowsService {
+    param([string] $Name)
+
+    Write-Step "Removing Windows service '$Name'."
+
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $service) {
+        Write-Step "Service '$Name' does not exist."
+        return
+    }
+
+    if ($service.Status -ne "Stopped") {
+        Write-Step "Stopping service '$Name'."
+        Stop-Service -Name $Name -Force -ErrorAction Stop
+
+        $service.WaitForStatus("Stopped", [TimeSpan]::FromSeconds(30))
+    }
+
+    sc.exe delete $Name | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Failed to delete Windows service '$Name'."
+    }
+
+    Write-Step "Service '$Name' was deleted."
+}
+
+if (-not $PSBoundParameters.ContainsKey("Action")) {
+    Show-Usage
+    return
+}
+
 if (-not (Test-IsAdministrator)) {
     Fail "This script must be run as Administrator."
+}
+
+if ($Action -eq "Remove") {
+    Remove-WindowsService -Name $ServiceName
+    Write-Step "Removal completed successfully."
+    return
 }
 
 if (-not $DotNetPath) {
