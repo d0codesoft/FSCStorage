@@ -136,8 +136,17 @@ namespace scp.filestorage.Services
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                await taskRepository.MarkFailedAsync(task.TaskId, DateTime.UtcNow, "Application shutdown canceled the task.", CancellationToken.None);
-                throw;
+                await taskRepository.MarkCanceledAsync(
+                    task.TaskId,
+                    DateTime.UtcNow,
+                    "Application shutdown canceled the task.",
+                    CancellationToken.None);
+
+                _logger.LogInformation(
+                    "File storage background task canceled during application shutdown. TaskId={TaskId}, Type={TaskType}, UploadId={UploadId}",
+                    task.TaskId,
+                    task.Type,
+                    task.UploadId);
             }
             catch (Exception ex)
             {

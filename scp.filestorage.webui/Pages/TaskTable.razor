@@ -1,0 +1,60 @@
+@using scp.filestorage.webui.Models
+
+@if (Tasks.Count == 0)
+{
+    <RadzenCard class="empty-panel">
+        <RadzenIcon Icon="task_alt" />
+        <span>No tasks.</span>
+    </RadzenCard>
+}
+else
+{
+    <RadzenDataGrid Data="@Tasks" TItem="BackgroundTaskViewModel" AllowPaging="true" PageSize="10" AllowSorting="true" class="app-grid">
+        <Columns>
+            <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Task" Property="TaskId">
+                <Template Context="task">
+                    <div class="primary-cell">@task.TaskId</div>
+                    <div class="secondary-cell">Upload: @(task.UploadId?.ToString() ?? "-")</div>
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Type" Property="TypeName" />
+            <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Status" Property="StatusName">
+                <Template Context="task">
+                    <RadzenBadge BadgeStyle="@GetTaskBadgeStyle(task.StatusName)" Text="@task.StatusName" />
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Queued UTC" Property="QueuedAtUtc">
+                <Template Context="task">@FormatUtc(task.QueuedAtUtc)</Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="112px">
+                <Template Context="task">
+                    <RadzenButton Text="Open" Icon="open_in_new" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => OnSelect.InvokeAsync(task.TaskId))" />
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+    [Parameter]
+    public IReadOnlyList<BackgroundTaskViewModel> Tasks { get; set; } = [];
+
+    [Parameter]
+    public EventCallback<Guid> OnSelect { get; set; }
+
+    private static string FormatUtc(DateTime value)
+    {
+        return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static BadgeStyle GetTaskBadgeStyle(string statusName)
+    {
+        return statusName.ToUpperInvariant() switch
+        {
+            "COMPLETED" or "DONE" or "SUCCESS" or "SUCCEEDED" => BadgeStyle.Success,
+            "FAILED" or "ERROR" => BadgeStyle.Danger,
+            "RUNNING" or "PROCESSING" or "STARTED" => BadgeStyle.Info,
+            _ => BadgeStyle.Secondary
+        };
+    }
+}

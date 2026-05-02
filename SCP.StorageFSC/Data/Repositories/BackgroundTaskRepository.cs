@@ -87,6 +87,7 @@ namespace SCP.StorageFSC.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+
                 WHERE task_id = @TaskId
                 LIMIT 1;
                 """;
@@ -118,6 +119,7 @@ namespace SCP.StorageFSC.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+
                 WHERE status IN (0, 1)
                 ORDER BY queued_at_utc ASC;
                 """;
@@ -151,6 +153,7 @@ namespace SCP.StorageFSC.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = SelectBaseSql + """
+
                 WHERE status IN (2, 3, 4)
                 ORDER BY COALESCE(completed_at_utc, failed_at_utc, updated_utc, queued_at_utc) DESC
                 LIMIT @Limit;
@@ -269,6 +272,38 @@ namespace SCP.StorageFSC.Data.Repositories
                     RowVersion = Guid.NewGuid()
                 },
                 $"mark background task '{taskId}' as failed",
+                cancellationToken);
+        }
+
+        public Task<bool> MarkCanceledAsync(
+            Guid taskId,
+            DateTime canceledAtUtc,
+            string? resultSummary = null,
+            CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                UPDATE background_tasks
+                SET
+                    status = @Status,
+                    failed_at_utc = @CanceledAtUtc,
+                    error_message = NULL,
+                    result_summary = @ResultSummary,
+                    updated_utc = @CanceledAtUtc,
+                    row_version = @RowVersion
+                WHERE task_id = @TaskId;
+                """;
+
+            return ExecuteStatusUpdateAsync(
+                sql,
+                new
+                {
+                    TaskId = taskId,
+                    Status = (short)BackgroundTaskStatus.Canceled,
+                    CanceledAtUtc = canceledAtUtc,
+                    ResultSummary = resultSummary,
+                    RowVersion = Guid.NewGuid()
+                },
+                $"mark background task '{taskId}' as canceled",
                 cancellationToken);
         }
 

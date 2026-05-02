@@ -22,27 +22,33 @@ namespace scp.filestorage.Services
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var initialDelay = NormalizeDelay(_options.CurrentValue.InitialDelay, TimeSpan.Zero);
-            if (initialDelay > TimeSpan.Zero)
-                await Task.Delay(initialDelay, stoppingToken);
-
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
-                {
-                    await RunCleanupAsync(stoppingToken);
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "File storage cleanup failed.");
-                }
+                var initialDelay = NormalizeDelay(_options.CurrentValue.InitialDelay, TimeSpan.Zero);
+                if (initialDelay > TimeSpan.Zero)
+                    await Task.Delay(initialDelay, stoppingToken);
 
-                var interval = NormalizeDelay(_options.CurrentValue.Interval, TimeSpan.FromDays(1));
-                await Task.Delay(interval, stoppingToken);
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await RunCleanupAsync(stoppingToken);
+                    }
+                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "File storage cleanup failed.");
+                    }
+
+                    var interval = NormalizeDelay(_options.CurrentValue.Interval, TimeSpan.FromDays(1));
+                    await Task.Delay(interval, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
             }
         }
 

@@ -1,11 +1,189 @@
-﻿@page "/"
+@page "/"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Storage statistics</PageTitle>
 
-<h1>Hello, world!</h1>
-
-<div class="alert alert-warning" role="alert">
-    Before authentication will function correctly, you must configure your provider details in <code>Program.cs</code>
+<div class="page-heading">
+    <div>
+        <h1>Storage statistics</h1>
+        <p>Disk usage, file volume, largest files, and tenant distribution.</p>
+    </div>
+    <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Primary" />
 </div>
 
-Welcome to your new app.
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+else if (isLoading && statistics is null)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else if (statistics is not null)
+{
+    <div class="metric-grid">
+        <RadzenCard class="metric-card metric-card--blue">
+            <RadzenIcon Icon="database" class="metric-icon" />
+            <span>Used space</span>
+            <strong>@FormatBytes(statistics.UsedBytes)</strong>
+        </RadzenCard>
+        <RadzenCard class="metric-card metric-card--green">
+            <RadzenIcon Icon="description" class="metric-icon" />
+            <span>Stored files</span>
+            <strong>@statistics.StoredFileCount</strong>
+        </RadzenCard>
+        <RadzenCard class="metric-card metric-card--amber">
+            <RadzenIcon Icon="folder_copy" class="metric-icon" />
+            <span>Tenant files</span>
+            <strong>@statistics.TenantFileCount</strong>
+        </RadzenCard>
+        <RadzenCard class="metric-card metric-card--slate">
+            <RadzenIcon Icon="business" class="metric-icon" />
+            <span>Active tenants</span>
+            <strong>@statistics.TenantCount</strong>
+        </RadzenCard>
+    </div>
+
+    <section class="chart-grid">
+        <RadzenCard class="chart-panel">
+            <h2>Tenant usage</h2>
+            <RadzenChart>
+                <RadzenColumnSeries Data="@TenantChartData" CategoryProperty="Name" ValueProperty="UsedMegabytes" Title="Used MB" Fill="#1d4ed8" />
+                <RadzenCategoryAxis />
+                <RadzenValueAxis Formatter="@FormatChartMegabytes" />
+                <RadzenLegend Visible="false" />
+            </RadzenChart>
+        </RadzenCard>
+
+        <RadzenCard class="chart-panel">
+            <h2>Tenant file share</h2>
+            <RadzenChart>
+                <RadzenDonutSeries Data="@TenantChartData" CategoryProperty="Name" ValueProperty="FileCount" Title="Files" InnerRadius="0.62" Fills="@DonutFills" />
+                <RadzenLegend Position="LegendPosition.Right" />
+            </RadzenChart>
+        </RadzenCard>
+    </section>
+
+    <section class="data-section">
+        <h2>Largest files</h2>
+        <RadzenDataGrid Data="@statistics.LargestFiles" TItem="LargestFileViewModel" AllowPaging="true" PageSize="10" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="LargestFileViewModel" Title="File" Sortable="true" Property="FileName">
+                    <Template Context="file">
+                        <div class="primary-cell">@file.FileName</div>
+                        <div class="secondary-cell">@file.FileGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LargestFileViewModel" Title="Tenant" Sortable="true" Property="TenantName">
+                    <Template Context="file">
+                        <div class="primary-cell">@file.TenantName</div>
+                        <div class="secondary-cell">@file.TenantGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LargestFileViewModel" Title="Size" Property="FileSize" TextAlign="TextAlign.Right">
+                    <Template Context="file">@FormatBytes(file.FileSize)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="LargestFileViewModel" Title="Created UTC" Property="CreatedUtc">
+                    <Template Context="file">@FormatUtc(file.CreatedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </section>
+
+    <section class="data-section">
+        <h2>Tenant usage</h2>
+        <RadzenDataGrid Data="@statistics.Tenants" TItem="TenantStorageStatisticsViewModel" AllowPaging="true" PageSize="10" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="TenantStorageStatisticsViewModel" Title="Tenant" Property="TenantName">
+                    <Template Context="tenant">
+                        <div class="primary-cell">@tenant.TenantName</div>
+                        <div class="secondary-cell">@tenant.TenantGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantStorageStatisticsViewModel" Title="Status" Property="IsActive">
+                    <Template Context="tenant">
+                        <RadzenBadge BadgeStyle="@(tenant.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(tenant.IsActive ? "Active" : "Disabled")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantStorageStatisticsViewModel" Title="Files" Property="FileCount" TextAlign="TextAlign.Right" />
+                <RadzenDataGridColumn TItem="TenantStorageStatisticsViewModel" Title="Used space" Property="UsedBytes" TextAlign="TextAlign.Right">
+                    <Template Context="tenant">@FormatBytes(tenant.UsedBytes)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </section>
+}
+
+@code {
+    private StorageStatisticsViewModel? statistics;
+    private bool isLoading;
+    private string? errorMessage;
+    private readonly string[] DonutFills = ["#1d4ed8", "#059669", "#d97706", "#7c3aed", "#0891b2", "#be123c"];
+
+    private IReadOnlyList<TenantChartPoint> TenantChartData =>
+        statistics?.Tenants
+            .OrderByDescending(tenant => tenant.UsedBytes)
+            .Take(6)
+            .Select(tenant => new TenantChartPoint(
+                tenant.TenantName,
+                Math.Round(tenant.UsedBytes / 1024d / 1024d, 2),
+                tenant.FileCount))
+            .ToList()
+        ?? [];
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            statistics = await ApiClient.GetStorageStatisticsAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = (double)bytes;
+        var unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes} B" : $"{value:0.##} {units[unit]}";
+    }
+
+    private static string FormatChartMegabytes(object value)
+    {
+        return value is IFormattable formattable
+            ? $"{formattable.ToString("0.#", null)} MB"
+            : $"{value} MB";
+    }
+
+    private sealed record TenantChartPoint(string Name, double UsedMegabytes, int FileCount);
+}

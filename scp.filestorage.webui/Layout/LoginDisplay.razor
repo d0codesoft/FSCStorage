@@ -1,19 +1,23 @@
-﻿@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Navigation
+@inject scp.filestorage.webui.Auth.ApiTokenAuthenticationStateProvider AuthenticationStateProvider
 
 <AuthorizeView>
     <Authorized>
-        Hello, @context.User.Identity?.Name!
-        <button class="nav-link btn btn-link" @onclick="BeginLogOut">Log out</button>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="login-display">
+            <RadzenIcon Icon="admin_panel_settings" />
+            <span class="login-name">@context.User.Identity?.Name</span>
+            <RadzenButton Text="Sign out" Icon="logout" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@BeginLogOut" />
+        </RadzenStack>
     </Authorized>
     <NotAuthorized>
-        <a href="authentication/login">Log in</a>
+        <RadzenButton Text="Sign in" Icon="login" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Primary" Click="@(() => Navigation.NavigateTo("login"))" />
     </NotAuthorized>
 </AuthorizeView>
 
-@code{
-    public void BeginLogOut()
+@code {
+    private async Task BeginLogOut()
     {
-        Navigation.NavigateToLogout("authentication/logout");
+        await AuthenticationStateProvider.SignOutAsync();
+        Navigation.NavigateTo("login");
     }
 }

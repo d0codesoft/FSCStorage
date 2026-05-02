@@ -1,17 +1,31 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inherits LayoutComponentBase
 
-    <main>
-        <div class="top-row px-4 auth">
+<RadzenLayout class="app-shell">
+    <RadzenHeader>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" JustifyContent="JustifyContent.SpaceBetween" Gap="1rem" class="app-header">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+                <RadzenSidebarToggle Click="@(() => sidebarExpanded = !sidebarExpanded)" ToggleAriaLabel="Toggle navigation" />
+                <div class="brand-mark">FS</div>
+                <div>
+                    <div class="brand-title">FSC Storage</div>
+                    <div class="brand-subtitle">Admin console</div>
+                </div>
+            </RadzenStack>
             <LoginDisplay />
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+        </RadzenStack>
+    </RadzenHeader>
 
-        <article class="content px-4">
+    <RadzenSidebar @bind-Expanded="@sidebarExpanded" Responsive="true" class="app-sidebar">
+        <NavMenu />
+    </RadzenSidebar>
+
+    <RadzenBody class="app-body">
+        <main class="content-shell">
             @Body
-        </article>
-    </main>
-</div>
+        </main>
+    </RadzenBody>
+</RadzenLayout>
+
+@code {
+    private bool sidebarExpanded = true;
+}

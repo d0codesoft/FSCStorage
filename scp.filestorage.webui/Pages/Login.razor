@@ -1,0 +1,68 @@
+@page "/login"
+@inject NavigationManager Navigation
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject scp.filestorage.webui.Auth.ApiTokenAuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Sign in</PageTitle>
+
+<RadzenCard class="login-panel">
+    <h1>Admin sign in</h1>
+    <p>Use an admin API token to open the storage console.</p>
+
+    <EditForm Model="@model" OnValidSubmit="SignInAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <RadzenFormField Text="API token" class="login-field">
+            <RadzenPassword id="api-token" @bind-Value="model.ApiToken" autocomplete="off" Style="width: 100%;" />
+        </RadzenFormField>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+                @errorMessage
+            </RadzenAlert>
+        }
+
+        <RadzenButton ButtonType="ButtonType.Submit" Text="@(isSubmitting ? "Checking..." : "Sign in")" Icon="login" Disabled="@isSubmitting" ButtonStyle="ButtonStyle.Primary" />
+    </EditForm>
+</RadzenCard>
+
+@code {
+    private readonly LoginModel model = new();
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private async Task SignInAsync()
+    {
+        if (string.IsNullOrWhiteSpace(model.ApiToken))
+        {
+            errorMessage = "Enter an API token.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            await AuthenticationStateProvider.SignInAsync(model.ApiToken.Trim());
+            await ApiClient.GetStorageStatisticsAsync(largestFilesLimit: 1);
+            Navigation.NavigateTo("");
+        }
+        catch (Exception ex)
+        {
+            await AuthenticationStateProvider.SignOutAsync();
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private sealed class LoginModel
+    {
+        public string ApiToken { get; set; } = string.Empty;
+    }
+}

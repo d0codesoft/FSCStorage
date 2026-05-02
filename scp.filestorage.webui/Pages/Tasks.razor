@@ -1,0 +1,143 @@
+@page "/tasks"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+
+<PageTitle>Background tasks</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>Background tasks</h1>
+        <p>Current and completed storage jobs with execution results.</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Check files" Icon="playlist_add_check" Click="@QueueConsistencyCheckAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Primary" />
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+<section class="data-section">
+    <h2>Current</h2>
+    @if (isLoading && activeTasks is null)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <TaskTable Tasks="@(activeTasks ?? [])" OnSelect="SelectTaskAsync" />
+    }
+</section>
+
+<section class="data-section">
+    <h2>Completed</h2>
+    @if (isLoading && completedTasks is null)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <TaskTable Tasks="@(completedTasks ?? [])" OnSelect="SelectTaskAsync" />
+    }
+</section>
+
+@if (selectedTask is not null)
+{
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>Task result</h2>
+            <RadzenButton Icon="close" Text="Close" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => selectedTask = null)" />
+        </div>
+        <dl class="details-grid">
+            <dt>Task ID</dt>
+            <dd>@selectedTask.TaskId</dd>
+            <dt>Type</dt>
+            <dd>@selectedTask.TypeName</dd>
+            <dt>Status</dt>
+            <dd>@selectedTask.StatusName</dd>
+            <dt>Queued UTC</dt>
+            <dd>@FormatUtc(selectedTask.QueuedAtUtc)</dd>
+            <dt>Started UTC</dt>
+            <dd>@FormatUtc(selectedTask.StartedAtUtc)</dd>
+            <dt>Completed UTC</dt>
+            <dd>@FormatUtc(selectedTask.CompletedAtUtc)</dd>
+            <dt>Failed UTC</dt>
+            <dd>@FormatUtc(selectedTask.FailedAtUtc)</dd>
+            <dt>Upload ID</dt>
+            <dd>@(selectedTask.UploadId?.ToString() ?? "-")</dd>
+        </dl>
+
+        <h3>Result</h3>
+        <pre class="task-output">@(selectedTask.ResultSummary ?? selectedTask.ErrorMessage ?? "No result has been recorded.")</pre>
+    </RadzenCard>
+}
+
+@code {
+    private IReadOnlyList<BackgroundTaskViewModel>? activeTasks;
+    private IReadOnlyList<BackgroundTaskViewModel>? completedTasks;
+    private BackgroundTaskViewModel? selectedTask;
+    private bool isLoading;
+    private string? errorMessage;
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            activeTasks = await ApiClient.GetActiveBackgroundTasksAsync();
+            completedTasks = await ApiClient.GetCompletedBackgroundTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task QueueConsistencyCheckAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            await ApiClient.QueueConsistencyCheckAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectTaskAsync(Guid taskId)
+    {
+        selectedTask = await ApiClient.GetBackgroundTaskAsync(taskId);
+    }
+
+    private static string FormatUtc(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
+            : "-";
+    }
+}

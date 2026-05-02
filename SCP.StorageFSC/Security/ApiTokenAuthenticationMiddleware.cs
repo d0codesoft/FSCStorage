@@ -88,6 +88,9 @@ namespace SCP.StorageFSC.Security
 
             var tenant = await ResolveTenantAsync(context, tenantRepository, isAdmin);
 
+            if (tenant is null && !isAdmin)
+                return null;
+
             if (tenant is not null)
             {
                 currentTenant.TenantId = tenant.Id;

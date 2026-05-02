@@ -62,6 +62,7 @@ builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IMultipartUploadSessionRepository, MultipartUploadSessionRepository>();
 builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRepository>();
 builder.Services.AddScoped<IBackgroundTaskRepository, BackgroundTaskRepository>();
+builder.Services.AddScoped<IStorageStatisticsRepository, StorageStatisticsRepository>();
 
 builder.Services.Configure<FileStorageMultipartOptions>(
     builder.Configuration.GetSection("FileStorageMultipart"));
@@ -96,11 +97,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseApiTokenAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.Run();

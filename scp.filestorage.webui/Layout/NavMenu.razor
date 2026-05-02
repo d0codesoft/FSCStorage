@@ -1,39 +1,14 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">scp.filestorage.webui</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
+<div class="sidebar-brand">
+    <div class="sidebar-brand__title">Storage FSC</div>
+    <div class="sidebar-brand__text">Files, tenants, background jobs</div>
 </div>
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-    </nav>
+<RadzenPanelMenu class="app-menu">
+    <RadzenPanelMenuItem Text="Statistics" Icon="monitoring" Path="/" Match="NavLinkMatch.All" />
+    <RadzenPanelMenuItem Text="Background tasks" Icon="fact_check" Path="/tasks" />
+</RadzenPanelMenu>
+
+<div class="sidebar-foot">
+    <div class="sidebar-foot__label">API guarded</div>
+    <div class="sidebar-foot__text">Admin token required</div>
 </div>
-
-@code {
-    private bool collapseNavMenu = true;
-
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
-}

@@ -16,6 +16,7 @@ namespace SCP.StorageFSC.Controllers
         private readonly ITenantStorageService _tenantStorageService;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
         private readonly IBackgroundTaskRepository _backgroundTaskRepository;
+        private readonly IStorageStatisticsRepository _storageStatisticsRepository;
         private readonly ILogger<TenantAdminController> _logger;
         private readonly ICurrentTenantAccessor _currentTenantAccessor;
 
@@ -23,12 +24,14 @@ namespace SCP.StorageFSC.Controllers
             ITenantStorageService tenantStorageService,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
             IBackgroundTaskRepository backgroundTaskRepository,
+            IStorageStatisticsRepository storageStatisticsRepository,
             ICurrentTenantAccessor currentTenantAccessor,
             ILogger<TenantAdminController> logger)
         {
             _tenantStorageService = tenantStorageService;
             _backgroundTaskQueue = backgroundTaskQueue;
             _backgroundTaskRepository = backgroundTaskRepository;
+            _storageStatisticsRepository = storageStatisticsRepository;
             _logger = logger;
             _currentTenantAccessor = currentTenantAccessor;
         }
@@ -251,6 +254,17 @@ namespace SCP.StorageFSC.Controllers
                 Status = BackgroundTaskStatus.Queued,
                 StatusName = BackgroundTaskStatus.Queued.ToString()
             });
+        }
+
+        [HttpGet("storage/statistics")]
+        [ProducesResponseType(typeof(StorageStatisticsDto), StatusCodes.Status200OK)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> GetStorageStatistics(
+            [FromQuery] int largestFilesLimit = 25,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _storageStatisticsRepository.GetAsync(largestFilesLimit, cancellationToken);
+            return Ok(result);
         }
 
         [HttpGet("storage/tasks/active")]

@@ -36,6 +36,12 @@ namespace SCP.StorageFSC.Data.Repositories
             string errorMessage,
             CancellationToken cancellationToken = default);
 
+        Task<bool> MarkCanceledAsync(
+            Guid taskId,
+            DateTime canceledAtUtc,
+            string? resultSummary = null,
+            CancellationToken cancellationToken = default);
+
         Task<int> DeleteCompletedOlderThanAsync(
             DateTime cutoffUtc,
             CancellationToken cancellationToken = default);
