@@ -207,6 +207,61 @@ namespace SCP.StorageFSC.Services
             return result;
         }
 
+        public async Task<bool> DeleteApiTokenAsync(
+            Guid tokenId,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            return await _apiTokenRepository.DeleteAsync(tokenId, cancellationToken);
+        }
+
+        public async Task<CreatedApiTokenResult?> RotateApiTokenAsync(
+            Guid tokenId,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var token = await _apiTokenRepository.GetByIdAsync(tokenId, cancellationToken);
+            if (token is null)
+                return null;
+
+            if (!token.TenantId.HasValue)
+                throw new InvalidOperationException("Only tenant-bound API tokens can be rotated.");
+
+            var plainTextToken = TokenHashHelper.GenerateToken();
+            var replacement = new ApiToken
+            {
+                TenantId = token.TenantId,
+                Name = token.Name,
+                TokenHash = TokenHashHelper.ComputeSha256(plainTextToken),
+                TokenPrefix = TokenHashHelper.GetPrefix(plainTextToken),
+                IsActive = true,
+                CanRead = token.CanRead,
+                CanWrite = token.CanWrite,
+                CanDelete = token.CanDelete,
+                IsAdmin = token.IsAdmin,
+                CreatedUtc = DateTime.UtcNow,
+                ExpiresUtc = token.ExpiresUtc
+            };
+
+            _ = await _apiTokenRepository.InsertAsync(replacement, cancellationToken);
+            _ = await _apiTokenRepository.RevokeAsync(tokenId, DateTime.UtcNow, cancellationToken);
+
+            _logger.LogInformation(
+                "API token rotated. OldTokenId={OldTokenId}, NewTokenId={NewTokenId}, TenantId={TenantId}, Prefix={TokenPrefix}",
+                token.Id,
+                replacement.Id,
+                replacement.TenantId,
+                replacement.TokenPrefix);
+
+            return new CreatedApiTokenResult
+            {
+                Token = MapToken(replacement),
+                PlainTextToken = plainTextToken
+            };
+        }
+
         private void EnsureAdmin()
         {
             var current = _currentTenantAccessor.GetRequired();

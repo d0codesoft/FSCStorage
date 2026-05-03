@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Services;
 
@@ -45,10 +46,8 @@ namespace SCP.StorageFSC.SecurityPermission
                         {
                             if (!TryGetGuid(context, _options.RouteParameterName!, out var tenantId))
                             {
-                                context.Result = new BadRequestObjectResult(new
-                                {
-                                    error = $"Route parameter '{_options.RouteParameterName}' is missing or invalid."
-                                });
+                                context.Result = new BadRequestObjectResult(
+                                    ApiErrorResponse.Create(context.HttpContext, "ValidationError", $"Route parameter '{_options.RouteParameterName}' is missing or invalid."));
                                 return;
                             }
 
@@ -60,10 +59,8 @@ namespace SCP.StorageFSC.SecurityPermission
                         {
                             if (!TryGetGuid(context, _options.RouteParameterGuidName!, out var tenantGuid))
                             {
-                                context.Result = new BadRequestObjectResult(new
-                                {
-                                    error = $"Route parameter '{_options.RouteParameterGuidName}' is missing or invalid."
-                                });
+                                context.Result = new BadRequestObjectResult(
+                                    ApiErrorResponse.Create(context.HttpContext, "ValidationError", $"Route parameter '{_options.RouteParameterGuidName}' is missing or invalid."));
                                 return;
                             }
 
@@ -73,10 +70,8 @@ namespace SCP.StorageFSC.SecurityPermission
                         }
                         else
                         {
-                            context.Result = new BadRequestObjectResult(new
-                            {
-                                error = "TenantAccessMode.AdminOrSameTenant requires route parameter configuration."
-                            });
+                            context.Result = new BadRequestObjectResult(
+                                ApiErrorResponse.Create(context.HttpContext, "ValidationError", "TenantAccessMode.AdminOrSameTenant requires route parameter configuration."));
                             return;
                         }
 
@@ -91,7 +86,10 @@ namespace SCP.StorageFSC.SecurityPermission
             }
             catch (TenantAccessDeniedException ex)
             {
-                context.Result = new ObjectResult(new { error = ex.Message })
+                context.Result = new ObjectResult(ApiErrorResponse.Create(
+                    context.HttpContext,
+                    "AccessDenied",
+                    ex.Message))
                 {
                     StatusCode = StatusCodes.Status403Forbidden
                 };

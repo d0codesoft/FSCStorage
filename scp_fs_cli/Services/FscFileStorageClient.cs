@@ -68,7 +68,7 @@ namespace scp_fs_cli.Services
             if (!string.IsNullOrWhiteSpace(externalKey))
                 content.Add(new StringContent(externalKey), "externalKey");
 
-            using var response = await _httpClient.PostAsync("api/file/upload", content, cancellationToken).ConfigureAwait(false);
+            using var response = await _httpClient.PostAsync("api/files", content, cancellationToken).ConfigureAwait(false);
             return await ReadRequiredJsonAsync<SaveFileResult>(
                 response,
                 "Simple upload failed",
@@ -143,10 +143,9 @@ namespace scp_fs_cli.Services
 
         public async Task<CompleteMultipartUploadResult> CompleteMultipartAsync(Guid uploadId, CancellationToken cancellationToken = default)
         {
-            using var response = await _httpClient.PostAsJsonAsync(
-                "api/multipart/complete",
-                new CompleteMultipartUploadRequest(uploadId),
-                JsonOptions.Default,
+            using var response = await _httpClient.PostAsync(
+                $"api/multipart/{uploadId}/complete",
+                content: null,
                 cancellationToken).ConfigureAwait(false);
 
             return await ReadRequiredJsonAsync<CompleteMultipartUploadResult>(

@@ -12,22 +12,13 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddAuthorizationCore();
 builder.Services.AddRadzenComponents();
-builder.Services.AddScoped<ApiTokenStore>();
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
+});
 builder.Services.AddScoped<ApiTokenAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<ApiTokenAuthenticationStateProvider>());
-builder.Services.AddScoped<ApiTokenAuthorizationMessageHandler>();
-
-builder.Services.AddScoped(sp =>
-{
-    var handler = sp.GetRequiredService<ApiTokenAuthorizationMessageHandler>();
-    handler.InnerHandler = new HttpClientHandler();
-
-    return new HttpClient(handler)
-    {
-        BaseAddress = new Uri(builder.HostEnvironment.BaseAddress)
-    };
-});
 
 builder.Services.AddScoped<AdminApiClient>();
 

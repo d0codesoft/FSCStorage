@@ -13,6 +13,7 @@ namespace SCP.StorageFSC.InterfacesService
         Task<ApiTokenDto?> GetApiTokenByIdAsync(Guid tokenId, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<ApiTokenDto>> GetTenantTokensAsync(Guid tenantId, CancellationToken cancellationToken = default);
         Task<bool> RevokeApiTokenAsync(Guid tokenId, CancellationToken cancellationToken = default);
-        
+        Task<bool> DeleteApiTokenAsync(Guid tokenId, CancellationToken cancellationToken = default);
+        Task<CreatedApiTokenResult?> RotateApiTokenAsync(Guid tokenId, CancellationToken cancellationToken = default);
     }
 }

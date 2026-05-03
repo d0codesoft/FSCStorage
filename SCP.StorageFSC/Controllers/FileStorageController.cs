@@ -2,12 +2,15 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.InterfacesService;
+using SCP.StorageFSC.Security;
+using SCP.StorageFSC.SecurityPermission;
 
 namespace SCP.StorageFSC.Controllers
 {
     [ApiController]
-    [Route("api/file")]
-    [Authorize]
+    [Route("api/files")]
+    [Authorize(Policy = ApiTokenAuthenticationExtensions.ApiTokenOnlyPolicy)]
+    [TenantAccess(TenantAccessMode.Authenticated)]
     public sealed class FileStorageController : Controller
     {
         private readonly IFileStorageService _fileStorageService;
@@ -24,17 +27,18 @@ namespace SCP.StorageFSC.Controllers
         /// <summary>
         /// Upload file for current tenant
         /// </summary>
-        [HttpPost("upload")]
+        [HttpPost]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [RequestSizeLimit(long.MaxValue)]
         [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         public async Task<IActionResult> Upload(
-            IFormFile file,
+            [FromForm(Name = "file")] IFormFile file,
             [FromForm] string? category,
             [FromForm] string? externalKey,
             CancellationToken cancellationToken)
         {
             if (file == null || file.Length == 0)
-                return BadRequest("File is required.");
+                return BadRequest(Error("ValidationError", "File is required."));
 
             await using var stream = file.OpenReadStream();
 
@@ -56,10 +60,10 @@ namespace SCP.StorageFSC.Controllers
 
             return result.Status switch
             {
-                SaveFileStatus.ValidationError => BadRequest(result),
-                SaveFileStatus.AccessDenied => Forbid(),
-                SaveFileStatus.DuplicateFile => Conflict(result),
-                _ => StatusCode(500, result)
+                SaveFileStatus.ValidationError => BadRequest(Error("ValidationError", result.ErrorMessage ?? "File upload validation failed.")),
+                SaveFileStatus.AccessDenied => StatusCode(StatusCodes.Status403Forbidden, Error("AccessDenied", result.ErrorMessage ?? "Access denied.")),
+                SaveFileStatus.DuplicateFile => Conflict(Error("DuplicateFile", result.ErrorMessage ?? "A file with the same key already exists.")),
+                _ => StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", result.ErrorMessage ?? "File upload failed."))
             };
         }
 
@@ -67,6 +71,7 @@ namespace SCP.StorageFSC.Controllers
         /// Get all tenant files
         /// </summary>
         [HttpGet]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
         public async Task<ActionResult<IReadOnlyList<StoredTenantFileDto>>> GetFiles(
             CancellationToken cancellationToken)
         {
@@ -77,7 +82,8 @@ namespace SCP.StorageFSC.Controllers
         /// <summary>
         /// Get file info by guid
         /// </summary>
-        [HttpGet("{fileGuid:guid}")]
+        [HttpGet("{fileGuid:guid}/metadata")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
         public async Task<ActionResult<StoredTenantFileDto>> GetFileInfo(
             Guid fileGuid,
             CancellationToken cancellationToken)
@@ -87,7 +93,7 @@ namespace SCP.StorageFSC.Controllers
                 cancellationToken);
 
             if (file == null)
-                return NotFound();
+                return NotFound(Error("FileNotFound", "File was not found."));
 
             return Ok(file);
         }
@@ -95,7 +101,8 @@ namespace SCP.StorageFSC.Controllers
         /// <summary>
         /// Download file content
         /// </summary>
-        [HttpGet("{fileGuid:guid}/download")]
+        [HttpGet("{fileGuid:guid}")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
         public async Task<IActionResult> Download(
             Guid fileGuid,
             CancellationToken cancellationToken)
@@ -105,7 +112,7 @@ namespace SCP.StorageFSC.Controllers
                 cancellationToken);
 
             if (result == null)
-                return NotFound();
+                return NotFound(Error("FileNotFound", "File was not found."));
 
             return File(
                 result.Content,
@@ -117,6 +124,7 @@ namespace SCP.StorageFSC.Controllers
         /// Delete tenant file
         /// </summary>
         [HttpDelete("{fileGuid:guid}")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Delete)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Delete(
@@ -128,25 +136,12 @@ namespace SCP.StorageFSC.Controllers
                 cancellationToken);
 
             if (!deleted)
-                return NotFound();
+                return NotFound(Error("FileNotFound", "File was not found."));
 
             return NoContent();
         }
 
-        /// <summary>
-        /// Cleanup orphan physical files (admin only)
-        /// </summary>
-        [HttpPost("cleanup-orphans")]
-        public async Task<ActionResult<int>> CleanupOrphans(
-            CancellationToken cancellationToken)
-        {
-            var deletedCount = await _fileStorageService.DeleteOrphanFilesAsync(
-                cancellationToken);
-
-            return Ok(new
-            {
-                DeletedCount = deletedCount
-            });
-        }
+        private ApiErrorResponse Error(string errorCode, string message) =>
+            ApiErrorResponse.Create(HttpContext, errorCode, message);
     }
 }

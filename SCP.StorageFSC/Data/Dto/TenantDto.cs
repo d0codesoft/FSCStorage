@@ -48,4 +48,53 @@ namespace SCP.StorageFSC.Data.Dto
         public ApiTokenDto Token { get; set; } = new();
         public string PlainTextToken { get; set; } = string.Empty;
     }
+
+    public sealed class CreatedApiTokenResponse
+    {
+        public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string TokenPrefix { get; set; } = string.Empty;
+        public string Token { get; set; } = string.Empty;
+        public string[] Scopes { get; set; } = [];
+        public bool IsAdmin { get; set; }
+        public DateTime? ExpiresUtc { get; set; }
+
+        public static CreatedApiTokenResponse FromResult(CreatedApiTokenResult result)
+        {
+            return new CreatedApiTokenResponse
+            {
+                Id = result.Token.Id,
+                TenantId = result.Token.TenantId,
+                Name = result.Token.Name,
+                TokenPrefix = result.Token.TokenPrefix,
+                Token = result.PlainTextToken,
+                Scopes = ApiTokenScopes.FromPermissions(
+                    result.Token.CanRead,
+                    result.Token.CanWrite,
+                    result.Token.CanDelete),
+                IsAdmin = result.Token.IsAdmin,
+                ExpiresUtc = result.Token.ExpiresUtc
+            };
+        }
+    }
+
+    public static class ApiTokenScopes
+    {
+        public static string[] FromPermissions(bool canRead, bool canWrite, bool canDelete)
+        {
+            var scopes = new List<string>(3);
+
+            if (canRead)
+                scopes.Add("files.read");
+
+            if (canWrite)
+                scopes.Add("files.write");
+
+            if (canDelete)
+                scopes.Add("files.delete");
+
+            return scopes.ToArray();
+        }
+    }
 }

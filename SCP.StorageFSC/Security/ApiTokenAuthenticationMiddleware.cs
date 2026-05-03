@@ -64,7 +64,8 @@ namespace SCP.StorageFSC.Security
             var user = context.User;
             var authType = user.FindFirst("auth_type")?.Value;
 
-            if (!string.Equals(authType, "api_token", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(authType, "api_token", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(authType, "web_user", StringComparison.OrdinalIgnoreCase))
             {
                 return null;
             }

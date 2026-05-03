@@ -1,11 +1,17 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using scp.filestorage.Data.Dto;
 using scp.filestorage.InterfacesService;
+using SCP.StorageFSC.Data.Dto;
+using SCP.StorageFSC.Security;
+using SCP.StorageFSC.SecurityPermission;
 
 namespace scp.filestorage.Controllers
 {
     [ApiController]
     [Route("api/multipart")]
+    [Authorize(Policy = ApiTokenAuthenticationExtensions.ApiTokenOnlyPolicy)]
+    [TenantAccess(TenantAccessMode.Authenticated)]
     public sealed class MultipartController : ControllerBase
     {
         private readonly IFileStorageMultipartService _multipartService;
@@ -23,6 +29,7 @@ namespace scp.filestorage.Controllers
         /// Initializes a multipart upload.
         /// </summary>
         [HttpPost("init")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [ProducesResponseType(typeof(InitMultipartUploadResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Init(
@@ -37,19 +44,17 @@ namespace scp.filestorage.Controllers
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Multipart init validation failed.");
-                return BadRequest(new { error = ex.Message });
+                return BadRequest(Error("ValidationError", ex.Message));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Multipart init failed.");
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Multipart initialization failed."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", "Multipart initialization failed."));
             }
         }
 
         [HttpPut("{uploadId:guid}/parts/{partNumber:int}")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [RequestSizeLimit(long.MaxValue)]
         [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         [ProducesResponseType(typeof(UploadMultipartPartResultDto), StatusCodes.Status200OK)]
@@ -63,10 +68,10 @@ namespace scp.filestorage.Controllers
             CancellationToken cancellationToken)
         {
             if (file is null)
-                return BadRequest(new { error = "File is required." });
+                return BadRequest(Error("ValidationError", "File is required."));
 
             if (file.Length <= 0)
-                return BadRequest(new { error = "File is empty." });
+                return BadRequest(Error("ValidationError", "File is empty."));
 
             try
             {
@@ -87,25 +92,22 @@ namespace scp.filestorage.Controllers
             catch (FileNotFoundException ex)
             {
                 _logger.LogWarning(ex, "Multipart session not found. UploadId={UploadId}", uploadId);
-                return NotFound(new { error = ex.Message });
+                return NotFound(Error("FileNotFound", ex.Message));
             }
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Multipart part validation failed. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return BadRequest(new { error = ex.Message });
+                return BadRequest(Error("ValidationError", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Multipart part upload rejected. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return BadRequest(new { error = ex.Message });
+                return Conflict(Error("Conflict", ex.Message));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Multipart part upload failed. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Multipart part upload failed."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", "Multipart part upload failed."));
             }
         }
 
@@ -118,6 +120,8 @@ namespace scp.filestorage.Controllers
         /// - file
         /// </summary>
         [HttpPost("part")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [RequestSizeLimit(long.MaxValue)]
         [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         [ProducesResponseType(typeof(UploadMultipartPartResultDto), StatusCodes.Status200OK)]
@@ -131,10 +135,10 @@ namespace scp.filestorage.Controllers
             CancellationToken cancellationToken)
         {
             if (file is null)
-                return BadRequest(new { error = "File is required." });
+                return BadRequest(Error("ValidationError", "File is required."));
 
             if (file.Length <= 0)
-                return BadRequest(new { error = "File is empty." });
+                return BadRequest(Error("ValidationError", "File is empty."));
 
             try
             {
@@ -155,25 +159,22 @@ namespace scp.filestorage.Controllers
             catch (FileNotFoundException ex)
             {
                 _logger.LogWarning(ex, "Multipart session not found. UploadId={UploadId}", uploadId);
-                return NotFound(new { error = ex.Message });
+                return NotFound(Error("FileNotFound", ex.Message));
             }
             catch (ArgumentException ex)
             {
                 _logger.LogWarning(ex, "Multipart part validation failed. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return BadRequest(new { error = ex.Message });
+                return BadRequest(Error("ValidationError", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Multipart part upload rejected. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return BadRequest(new { error = ex.Message });
+                return Conflict(Error("Conflict", ex.Message));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Multipart part upload failed. UploadId={UploadId}, PartNumber={PartNumber}", uploadId, partNumber);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Multipart part upload failed."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", "Multipart part upload failed."));
             }
         }
 
@@ -181,6 +182,7 @@ namespace scp.filestorage.Controllers
         /// Gets multipart upload status.
         /// </summary>
         [HttpGet("{uploadId:guid}/status")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
         [ProducesResponseType(typeof(MultipartUploadStatusDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetStatus(
@@ -191,31 +193,31 @@ namespace scp.filestorage.Controllers
             {
                 var result = await _multipartService.GetStatusAsync(uploadId, cancellationToken);
                 if (result is null)
-                    return NotFound();
+                    return NotFound(Error("FileNotFound", "Multipart upload was not found."));
 
                 return Ok(result);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get multipart status. UploadId={UploadId}", uploadId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Failed to get multipart upload status."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("DatabaseFailed", "Failed to get multipart upload status."));
             }
         }
 
         /// <summary>
         /// Completes the multipart upload and assembles the file.
         /// </summary>
-        [HttpPost("complete")]
+        [HttpPost("{uploadId:guid}/complete")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [ProducesResponseType(typeof(CompleteMultipartUploadResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Complete(
-            [FromBody] CompleteMultipartUploadRequestDto request,
+            Guid uploadId,
             CancellationToken cancellationToken)
         {
+            var request = new CompleteMultipartUploadRequestDto { UploadId = uploadId };
+
             try
             {
                 var result = await _multipartService.CompleteAsync(request, cancellationToken);
@@ -224,27 +226,35 @@ namespace scp.filestorage.Controllers
             catch (FileNotFoundException ex)
             {
                 _logger.LogWarning(ex, "Multipart session not found during complete. UploadId={UploadId}", request.UploadId);
-                return NotFound(new { error = ex.Message });
+                return NotFound(Error("FileNotFound", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Multipart complete rejected. UploadId={UploadId}", request.UploadId);
-                return BadRequest(new { error = ex.Message });
+                return Conflict(Error("Conflict", ex.Message));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Multipart complete failed. UploadId={UploadId}", request.UploadId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Multipart complete failed."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", "Multipart complete failed."));
             }
+        }
+
+        [HttpPost("complete")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
+        public Task<IActionResult> CompleteLegacy(
+            [FromBody] CompleteMultipartUploadRequestDto request,
+            CancellationToken cancellationToken)
+        {
+            return Complete(request.UploadId, cancellationToken);
         }
 
         /// <summary>
         /// Aborts the multipart upload.
         /// </summary>
-        [HttpPost("{uploadId:guid}/abort")]
+        [HttpDelete("{uploadId:guid}/abort")]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
         [ProducesResponseType(typeof(AbortMultipartUploadResultDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> Abort(
@@ -259,21 +269,31 @@ namespace scp.filestorage.Controllers
             catch (FileNotFoundException ex)
             {
                 _logger.LogWarning(ex, "Multipart session not found during abort. UploadId={UploadId}", uploadId);
-                return NotFound(new { error = ex.Message });
+                return NotFound(Error("FileNotFound", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(ex, "Multipart abort rejected. UploadId={UploadId}", uploadId);
-                return BadRequest(new { error = ex.Message });
+                return Conflict(Error("Conflict", ex.Message));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Multipart abort failed. UploadId={UploadId}", uploadId);
-                return StatusCode(StatusCodes.Status500InternalServerError, new
-                {
-                    error = "Multipart abort failed."
-                });
+                return StatusCode(StatusCodes.Status500InternalServerError, Error("StorageFailed", "Multipart abort failed."));
             }
         }
+
+        [HttpPost("{uploadId:guid}/abort")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
+        public Task<IActionResult> AbortLegacy(
+            Guid uploadId,
+            CancellationToken cancellationToken)
+        {
+            return Abort(uploadId, cancellationToken);
+        }
+
+        private ApiErrorResponse Error(string errorCode, string message) =>
+            ApiErrorResponse.Create(HttpContext, errorCode, message);
     }
 }

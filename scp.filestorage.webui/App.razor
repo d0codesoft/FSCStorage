@@ -1,4 +1,9 @@
-﻿<CascadingAuthenticationState>
+﻿<HeadContent>
+    <RadzenTheme Theme="software" />
+    <link rel="stylesheet" href="css/theme-overrides.css" />
+</HeadContent>
+
+<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)" >
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">

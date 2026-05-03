@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
 using scp.filestorage.Services;
@@ -10,10 +11,12 @@ using SCP.StorageFSC.SecurityPermission;
 namespace SCP.StorageFSC.Controllers
 {
     [ApiController]
-    [Route("api/admin")]
+    [Route("ui-api")]
+    [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
     public class TenantAdminController : Controller
     {
         private readonly ITenantStorageService _tenantStorageService;
+        private readonly IFileStorageService _fileStorageService;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
         private readonly IBackgroundTaskRepository _backgroundTaskRepository;
         private readonly IStorageStatisticsRepository _storageStatisticsRepository;
@@ -22,6 +25,7 @@ namespace SCP.StorageFSC.Controllers
 
         public TenantAdminController(
             ITenantStorageService tenantStorageService,
+            IFileStorageService fileStorageService,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
             IBackgroundTaskRepository backgroundTaskRepository,
             IStorageStatisticsRepository storageStatisticsRepository,
@@ -29,6 +33,7 @@ namespace SCP.StorageFSC.Controllers
             ILogger<TenantAdminController> logger)
         {
             _tenantStorageService = tenantStorageService;
+            _fileStorageService = fileStorageService;
             _backgroundTaskQueue = backgroundTaskQueue;
             _backgroundTaskRepository = backgroundTaskRepository;
             _storageStatisticsRepository = storageStatisticsRepository;
@@ -54,6 +59,8 @@ namespace SCP.StorageFSC.Controllers
         }
         
         [HttpGet("tenant/me")]
+        [HttpGet("tenants/me")]
+        [Authorize(Policy = ApiTokenAuthenticationExtensions.WebUserOnlyPolicy)]
         [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
         public async Task<IActionResult> GetMyTenant(CancellationToken cancellationToken)
         {
@@ -139,20 +146,15 @@ namespace SCP.StorageFSC.Controllers
             }
         }
 
-        [HttpGet("tenants/{tenantId:guid}/tokens")]
+        [HttpGet("api-tokens")]
         [ProducesResponseType(typeof(IReadOnlyList<ApiTokenDto>), StatusCodes.Status200OK)]
-        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Read)]
-        public async Task<IActionResult> GetTenantTokens(Guid tenantId, CancellationToken cancellationToken)
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> GetTenantTokens(
+            [FromQuery] Guid tenantId,
+            CancellationToken cancellationToken)
         {
             try
             {
-                var current = _currentTenantAccessor.GetRequired();
-                if (!current.IsAdmin && current.TenantId != tenantId)
-                {
-                    _logger.LogWarning("Tenant {TenantId} attempted to access tokens for tenant {TargetTenantId}.", current.TenantId, tenantId);
-                    return Forbid();
-                }
-
                 var result = await _tenantStorageService.GetTenantTokensAsync(tenantId, cancellationToken);
                 return Ok(result);
             }
@@ -163,24 +165,25 @@ namespace SCP.StorageFSC.Controllers
             }
         }
 
-        [HttpPost("tokens")]
-        [ProducesResponseType(typeof(CreatedApiTokenResult), StatusCodes.Status201Created)]
-        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
+        [HttpGet("tenants/{tenantId:guid}/api-tokens")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public Task<IActionResult> GetTenantTokensLegacy(Guid tenantId, CancellationToken cancellationToken)
+        {
+            return GetTenantTokens(tenantId, cancellationToken);
+        }
+
+        [HttpPost("api-tokens")]
+        [ProducesResponseType(typeof(CreatedApiTokenResponse), StatusCodes.Status201Created)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
         public async Task<IActionResult> CreateToken(
             [FromBody] CreateApiTokenRequest request,
             CancellationToken cancellationToken)
         {
             try
             {
-                var current = _currentTenantAccessor.GetRequired();
-                if (!current.IsAdmin && current.TenantId != request.TenantId)
-                {
-                    _logger.LogWarning("Tenant {TenantId} attempted to create token for tenant {TargetTenantId}.", current.TenantId, request.TenantId);
-                    return Forbid();
-                }
-
                 var result = await _tenantStorageService.CreateApiTokenAsync(request, cancellationToken);
-                return StatusCode(StatusCodes.Status201Created, result);
+                return StatusCode(StatusCodes.Status201Created, CreatedApiTokenResponse.FromResult(result));
             }
             catch (UnauthorizedAccessException ex)
             {
@@ -189,41 +192,25 @@ namespace SCP.StorageFSC.Controllers
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new { error = ex.Message });
+                return BadRequest(ApiErrorResponse.Create(HttpContext, "ValidationError", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
-                return NotFound(new { error = ex.Message });
+                return NotFound(ApiErrorResponse.Create(HttpContext, "TenantNotFound", ex.Message));
             }
         }
 
-        [HttpPost("tokens/{tokenId:guid}/revoke")]
+        [HttpDelete("api-tokens/{tokenId:guid}")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [TenantAccess(TenantAccessMode.Authenticated, TenantPermission.Write)]
-        public async Task<IActionResult> RevokeToken(Guid tokenId, CancellationToken cancellationToken)
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> DeleteToken(Guid tokenId, CancellationToken cancellationToken)
         {
             try
             {
-                var current = _currentTenantAccessor.GetRequired();
-                if (!current.IsAdmin)
-                {
-                    var token = await _tenantStorageService.GetApiTokenByIdAsync(tokenId, cancellationToken);
-                    if (token is null)
-                    {
-                        _logger.LogWarning("Token {TokenId} not found for revocation.", tokenId);
-                        return NotFound();
-                    }
-                    if (token.TenantId != current.TenantId)
-                    {
-                        _logger.LogWarning("Tenant {TenantId} attempted to revoke token {TokenId} belonging to tenant {TargetTenantId}.", current.TenantId, tokenId, token.TenantId);
-                        return Forbid();
-                    }
-                }
-
-                var result = await _tenantStorageService.RevokeApiTokenAsync(tokenId, cancellationToken);
+                var result = await _tenantStorageService.DeleteApiTokenAsync(tokenId, cancellationToken);
                 if (!result)
-                    return NotFound();
+                    return NotFound(ApiErrorResponse.Create(HttpContext, "FileNotFound", "API token was not found."));
 
                 return NoContent();
             }
@@ -232,6 +219,42 @@ namespace SCP.StorageFSC.Controllers
                 _logger.LogWarning(ex, "Access denied while revoking token {TokenId}.", tokenId);
                 return Forbid();
             }
+        }
+
+        [HttpPost("api-tokens/{tokenId:guid}/disable")]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> DisableToken(Guid tokenId, CancellationToken cancellationToken)
+        {
+            var result = await _tenantStorageService.RevokeApiTokenAsync(tokenId, cancellationToken);
+            return result
+                ? NoContent()
+                : NotFound(ApiErrorResponse.Create(HttpContext, "FileNotFound", "API token was not found."));
+        }
+
+        [HttpPost("api-tokens/{tokenId:guid}/rotate")]
+        [ProducesResponseType(typeof(CreatedApiTokenResponse), StatusCodes.Status201Created)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> RotateToken(Guid tokenId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await _tenantStorageService.RotateApiTokenAsync(tokenId, cancellationToken);
+                return result is null
+                    ? NotFound(ApiErrorResponse.Create(HttpContext, "FileNotFound", "API token was not found."))
+                    : StatusCode(StatusCodes.Status201Created, CreatedApiTokenResponse.FromResult(result));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(ApiErrorResponse.Create(HttpContext, "Conflict", ex.Message));
+            }
+        }
+
+        [HttpPost("tokens/{tokenId:guid}/revoke")]
+        [ApiExplorerSettings(IgnoreApi = true)]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public Task<IActionResult> RevokeTokenLegacy(Guid tokenId, CancellationToken cancellationToken)
+        {
+            return DisableToken(tokenId, cancellationToken);
         }
 
         [HttpPost("storage/check-consistency")]
@@ -253,6 +276,19 @@ namespace SCP.StorageFSC.Controllers
                 task.CreatedAtUtc,
                 Status = BackgroundTaskStatus.Queued,
                 StatusName = BackgroundTaskStatus.Queued.ToString()
+            });
+        }
+
+        [HttpPost("system/cleanup-orphans")]
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<ActionResult<int>> CleanupOrphans(
+            CancellationToken cancellationToken)
+        {
+            var deletedCount = await _fileStorageService.DeleteOrphanFilesAsync(cancellationToken);
+
+            return Ok(new
+            {
+                DeletedCount = deletedCount
             });
         }
 
