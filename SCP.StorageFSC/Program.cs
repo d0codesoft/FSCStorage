@@ -97,7 +97,10 @@ builder.Services.AddHostedService<FileStorageCleanupBackgroundService>();
 
 builder.Services.AddControllers();
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<OpenApiSecurityDocumentTransformer>();
+});
 
 builder.Services.AddApiTokenAuthentication();
 

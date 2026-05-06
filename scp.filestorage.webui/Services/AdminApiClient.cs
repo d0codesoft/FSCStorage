@@ -18,7 +18,7 @@ namespace scp.filestorage.webui.Services
             CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.GetAsync(
-                $"api/admin/storage/statistics?largestFilesLimit={largestFilesLimit}",
+                $"ui-api/storage/statistics?largestFilesLimit={largestFilesLimit}",
                 cancellationToken);
 
             await EnsureSuccessAsync(response, cancellationToken);
@@ -31,7 +31,7 @@ namespace scp.filestorage.webui.Services
         public async Task<IReadOnlyList<BackgroundTaskViewModel>> GetActiveBackgroundTasksAsync(
             CancellationToken cancellationToken = default)
         {
-            return await GetBackgroundTasksAsync("api/admin/storage/tasks/active", cancellationToken);
+            return await GetBackgroundTasksAsync("ui-api/storage/tasks/active", cancellationToken);
         }
 
         public async Task<IReadOnlyList<BackgroundTaskViewModel>> GetCompletedBackgroundTasksAsync(
@@ -39,7 +39,7 @@ namespace scp.filestorage.webui.Services
             CancellationToken cancellationToken = default)
         {
             return await GetBackgroundTasksAsync(
-                $"api/admin/storage/tasks/completed?limit={limit}",
+                $"ui-api/storage/tasks/completed?limit={limit}",
                 cancellationToken);
         }
 
@@ -47,7 +47,7 @@ namespace scp.filestorage.webui.Services
             Guid taskId,
             CancellationToken cancellationToken = default)
         {
-            var response = await _httpClient.GetAsync($"api/admin/storage/tasks/{taskId}", cancellationToken);
+            var response = await _httpClient.GetAsync($"ui-api/storage/tasks/{taskId}", cancellationToken);
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return null;
 
@@ -59,7 +59,7 @@ namespace scp.filestorage.webui.Services
 
         public async Task QueueConsistencyCheckAsync(CancellationToken cancellationToken = default)
         {
-            var response = await _httpClient.PostAsync("api/admin/storage/check-consistency", null, cancellationToken);
+            var response = await _httpClient.PostAsync("ui-api/storage/check-consistency", null, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
@@ -85,8 +85,8 @@ namespace scp.filestorage.webui.Services
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
             var message = response.StatusCode switch
             {
-                HttpStatusCode.Unauthorized => "API token is missing or invalid.",
-                HttpStatusCode.Forbidden => "This page requires an admin API token.",
+                HttpStatusCode.Unauthorized => "Sign in is required.",
+                HttpStatusCode.Forbidden => "This page requires an admin session.",
                 _ => string.IsNullOrWhiteSpace(body)
                     ? $"Request failed with status {(int)response.StatusCode}."
                     : body

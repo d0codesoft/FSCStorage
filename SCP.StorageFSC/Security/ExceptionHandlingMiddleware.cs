@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Mvc;
 using SCP.StorageFSC.Data;
+using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.Services;
 
 namespace SCP.StorageFSC.Security
@@ -37,7 +37,7 @@ namespace SCP.StorageFSC.Security
                 await WriteProblemDetailsAsync(
                     context,
                     StatusCodes.Status403Forbidden,
-                    "Access denied",
+                    "AccessDenied",
                     ex.Message);
             }
             catch (RepositoryException ex)
@@ -46,7 +46,7 @@ namespace SCP.StorageFSC.Security
                 await WriteProblemDetailsAsync(
                     context,
                     StatusCodes.Status500InternalServerError,
-                    "Database operation failed",
+                    "DatabaseFailed",
                     "An internal data access error occurred.");
             }
             catch (Exception ex)
@@ -55,7 +55,7 @@ namespace SCP.StorageFSC.Security
                 await WriteProblemDetailsAsync(
                     context,
                     StatusCodes.Status500InternalServerError,
-                    "Internal server error",
+                    "StorageFailed",
                     "An unexpected error occurred.");
             }
         }
@@ -63,25 +63,19 @@ namespace SCP.StorageFSC.Security
         private static async Task WriteProblemDetailsAsync(
             HttpContext context,
             int statusCode,
-            string title,
-            string detail)
+            string errorCode,
+            string message)
         {
             if (context.Response.HasStarted)
                 return;
 
             context.Response.Clear();
             context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "application/problem+json";
+            context.Response.ContentType = "application/json";
 
-            var problem = new ProblemDetails
-            {
-                Status = statusCode,
-                Title = title,
-                Detail = detail,
-                Instance = context.Request.Path
-            };
-
-            await context.Response.WriteAsJsonAsync(problem, cancellationToken: context.RequestAborted);
+            await context.Response.WriteAsJsonAsync(
+                ApiErrorResponse.Create(context, errorCode, message),
+                cancellationToken: context.RequestAborted);
         }
     }
 }

@@ -53,13 +53,22 @@ namespace SCP.StorageFSC.Services
             var scopes = new List<string>(3);
 
             if (token.CanRead)
+            {
                 scopes.Add("read");
+                scopes.Add("files.read");
+            }
 
             if (token.CanWrite)
+            {
                 scopes.Add("write");
+                scopes.Add("files.write");
+            }
 
             if (token.CanDelete)
+            {
                 scopes.Add("delete");
+                scopes.Add("files.delete");
+            }
 
             if (token.IsAdmin)
                 scopes.Add("admin");

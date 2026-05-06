@@ -1,26 +1,246 @@
+/* =========================
+   Light theme
+   ========================= */
+:root {
+    /* Brand */
+    --rz-primary: #3756b5;
+    --rz-primary-dark: #2c4694;
+    --rz-primary-light: #5d78c8;
+    --rz-primary-lighter: #dbe3f7;
+    --rz-secondary: #fdcc51;
+    /* Base */
+    --rz-body-background-color: #f7f5f4;
+    --rz-text-color: #2a2f3a;
+    --rz-text-title-color: #1d2433;
+    /* Optional useful Radzen-style extras */
+    --rz-base-background-color: #ffffff;
+    --rz-panel-background-color: #ffffff;
+    --rz-card-background-color: #ffffff;
+    --rz-sidebar-background-color: #eef2fb;
+    --rz-header-background-color: #ffffff;
+    --rz-footer-background-color: #ffffff;
+    --rz-border-color: #d9dce5;
+    --rz-input-background-color: #ffffff;
+    --rz-input-border-color: #c9cfdd;
+    --rz-text-secondary-color: #667085;
+    --rz-content-background-color: #ffffff;
+    --rz-grid-header-background-color: #eef2fb;
+    --rz-grid-even-row-background-color: #fafbfe;
+    --rz-grid-hover-background-color: #f2f5fc;
+    --rz-button-hover-background-color: #2c4694;
+    --rz-button-hover-color: #ffffff;
+    --rz-link-color: #3756b5;
+    --rz-link-hover-color: #2c4694;
+    --rz-focus-color: rgba(55, 86, 181, 0.35);
+    --rz-shadow-color: rgba(20, 27, 45, 0.12);
+}
+
+/* =========================
+   Dark theme
+   Add class="dark-theme" to body or a root container
+   ========================= */
+.dark-theme {
+    /* Brand */
+    --rz-primary: #6f89d6;
+    --rz-primary-dark: #5875cc;
+    --rz-primary-light: #8fa3e0;
+    --rz-primary-lighter: #2d3860;
+    --rz-secondary: #fdcc51;
+    /* Base */
+    --rz-body-background-color: #161a22;
+    --rz-text-color: #e8e1e0;
+    --rz-text-title-color: #ffffff;
+    /* Optional useful Radzen-style extras */
+    --rz-base-background-color: #1d2330;
+    --rz-panel-background-color: #202737;
+    --rz-card-background-color: #202737;
+    --rz-sidebar-background-color: #171d29;
+    --rz-header-background-color: #1b2130;
+    --rz-footer-background-color: #1b2130;
+    --rz-border-color: #313a4f;
+    --rz-input-background-color: #151b27;
+    --rz-input-border-color: #3b4761;
+    --rz-text-secondary-color: #b7becd;
+    --rz-content-background-color: #1d2330;
+    --rz-grid-header-background-color: #25304a;
+    --rz-grid-even-row-background-color: #1a2130;
+    --rz-grid-hover-background-color: #27324d;
+    --rz-button-hover-background-color: #5875cc;
+    --rz-button-hover-color: #ffffff;
+    --rz-link-color: #8fa3e0;
+    --rz-link-hover-color: #bfd0ff;
+    --rz-focus-color: rgba(111, 137, 214, 0.4);
+    --rz-shadow-color: rgba(0, 0, 0, 0.35);
+}
+
+/* =========================
+   App palette alignment
+   Uses only base colors:
+   #3756b5 #fdcc51 #e8e1e0
+   ========================= */
+
+:root {
+    --app-primary: #3756b5;
+    --app-primary-dark: #2c4694;
+    --app-primary-light: #5d78c8;
+    --app-accent: #fdcc51;
+    --app-accent-dark: #e3b63f;
+    --app-neutral: #e8e1e0;
+    --app-neutral-dark: #d7cfce;
+    --app-surface: #ffffff;
+    --app-surface-soft: #f7f5f4;
+    --app-text: #2a2f3a;
+    --app-text-muted: #6d7280;
+    --app-title: #1d2433;
+    --app-sidebar-text: #e8e1e0;
+    --app-sidebar-muted: #d7cfce;
+}
+
+.dark-theme {
+    --app-primary: #6f89d6;
+    --app-primary-dark: #5875cc;
+    --app-primary-light: #8fa3e0;
+    --app-accent: #fdcc51;
+    --app-accent-dark: #e3b63f;
+    --app-neutral: #e8e1e0;
+    --app-neutral-dark: #bfb7b6;
+    --app-surface: #1d2330;
+    --app-surface-soft: #161a22;
+    --app-text: #e8e1e0;
+    --app-text-muted: #d7cfce;
+    --app-title: #ffffff;
+    --app-sidebar-text: #e8e1e0;
+    --app-sidebar-muted: #d7cfce;
+}
+
 html,
 body {
-    min-height: 100%;
-    margin: 0;
-    background: #f5f7fb;
-    color: #111827;
+    background: var(--rz-body-background-color);
+    color: var(--rz-text-color);
 }
+
+a {
+    color: var(--rz-link-color);
+}
+
+    a:hover {
+        color: var(--rz-link-hover-color);
+    }
+
+code {
+    color: var(--app-primary-dark);
+}
+
+.dark-theme code {
+    color: var(--app-accent);
+}
+
+#blazor-error-ui {
+    background: color-mix(in srgb, var(--app-accent) 28%, var(--app-surface) 72%);
+    color: var(--app-title);
+    box-shadow: 0 -1px 2px var(--rz-shadow-color);
+}
+
+.blazor-error-boundary {
+    background: var(--app-primary-dark);
+    color: #ffffff;
+}
+
+.loading-progress circle {
+    stroke: color-mix(in srgb, var(--app-neutral) 78%, white 22%);
+}
+
+    .loading-progress circle:last-child {
+        stroke: var(--app-primary);
+    }
+
+.loading-progress-text,
+.page-heading h1,
+.chart-panel h2,
+.data-section h2,
+.details-panel h2,
+.login-panel h1 {
+    color: var(--app-title);
+}
+
+.page-heading p,
+.metric-card span,
+.secondary-cell,
+.details-grid dt,
+.empty-panel,
+.login-panel p,
+.login-name {
+    color: var(--app-text-muted);
+}
+
+.metric-card,
+.chart-panel,
+.app-grid,
+.details-panel,
+.task-output,
+.empty-panel,
+.login-panel {
+    border-color: var(--rz-border-color);
+    background: var(--app-surface);
+}
+
+    .metric-card strong,
+    .primary-cell,
+    .sidebar-foot__label {
+        color: var(--app-title);
+    }
+
+.metric-icon {
+    color: #ffffff;
+}
+
+.metric-card--blue .metric-icon,
+.metric-card--green .metric-icon,
+.metric-card--amber .metric-icon,
+.metric-card--slate .metric-icon {
+    background: var(--app-primary);
+}
+
+.metric-card--amber .metric-icon {
+    background: var(--app-accent-dark);
+    color: #2a2f3a;
+}
+
+.task-output {
+    background: var(--app-surface-soft);
+}
+
+.sidebar-brand__title {
+    color: var(--app-sidebar-text);
+}
+
+.sidebar-brand__text,
+.sidebar-foot__text {
+    color: var(--app-sidebar-muted);
+}
+
+.app-menu .rz-navigation-item-link {
+    color: var(--app-sidebar-text);
+}
+
+    .app-menu .rz-navigation-item-link:hover,
+    .app-menu .rz-navigation-item-active > .rz-navigation-item-link {
+        background: color-mix(in srgb, var(--app-primary) 26%, transparent 74%);
+        color: #ffffff;
+    }
+
+.sidebar-foot {
+    border-color: color-mix(in srgb, var(--app-neutral) 18%, transparent 82%);
+    background: color-mix(in srgb, var(--app-neutral) 8%, transparent 92%);
+}
+
 
 h1:focus {
     outline: none;
 }
 
-a {
-    color: #1d4ed8;
-}
-
-code {
-    color: #be123c;
-}
-
 #blazor-error-ui {
     color-scheme: light only;
-    background: #fff7ed;
     bottom: 0;
     box-shadow: 0 -1px 2px rgba(15, 23, 42, 0.18);
     box-sizing: border-box;
@@ -42,7 +262,6 @@ code {
 .blazor-error-boundary {
     background: #991b1b;
     border-radius: 8px;
-    color: white;
     padding: 1rem;
 }
 
@@ -101,7 +320,6 @@ code {
 
 .page-heading p {
     margin: 0;
-    color: #64748b;
 }
 
 .button-row {
@@ -127,14 +345,12 @@ code {
 
 .metric-card span {
     display: block;
-    color: #64748b;
     font-size: 0.9rem;
 }
 
 .metric-card strong {
     display: block;
     margin-top: 0.4rem;
-    color: #0f172a;
     font-size: 1.55rem;
     font-weight: 800;
     overflow-wrap: anywhere;
@@ -147,7 +363,6 @@ code {
     height: 2.25rem;
     margin-bottom: 0.85rem;
     border-radius: 8px;
-    color: #fff;
 }
 
 .metric-card--blue .metric-icon {
@@ -182,7 +397,6 @@ code {
 .data-section h2,
 .details-panel h2 {
     margin: 0 0 0.9rem;
-    color: #1f2937;
     font-size: 1.05rem;
     font-weight: 700;
 }

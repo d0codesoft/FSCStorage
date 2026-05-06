@@ -11,7 +11,10 @@
                     <div class="brand-subtitle">Admin console</div>
                 </div>
             </RadzenStack>
-            <LoginDisplay />
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="header-actions">
+                <RadzenAppearanceToggle LightTheme="software" DarkTheme="software-dark" ButtonStyle="ButtonStyle.Light" ToggleButtonStyle="ButtonStyle.Dark" Variant="Variant.Flat" />
+                <LoginDisplay />
+            </RadzenStack>
         </RadzenStack>
     </RadzenHeader>
 

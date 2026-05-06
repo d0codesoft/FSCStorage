@@ -1,13 +1,13 @@
 ::deep .app-shell {
     min-height: 100vh;
-    background: #f5f7fb;
+    background: var(--rz-base-background-color, #f5f7fb);
 }
 
 ::deep .app-header {
     min-height: 4rem;
     padding: 0 1.25rem;
-    background: #ffffff;
-    border-bottom: 1px solid #e5e8ef;
+    background: var(--rz-header-background-color, var(--rz-base-50, #ffffff));
+    border-bottom: 1px solid var(--rz-border-color, #e5e8ef);
 }
 
 ::deep .app-sidebar {
@@ -22,7 +22,7 @@
 }
 
 ::deep .app-body {
-    background: #f5f7fb;
+    background: var(--rz-base-background-color, #f5f7fb);
 }
 
 .content-shell {
@@ -43,16 +43,20 @@
 }
 
 .brand-title {
-    color: #111827;
+    color: var(--rz-text-title-color, #111827);
     font-size: 1rem;
     font-weight: 700;
     line-height: 1.2;
 }
 
 .brand-subtitle {
-    color: #64748b;
+    color: var(--rz-text-secondary-color, #64748b);
     font-size: 0.78rem;
     line-height: 1.2;
+}
+
+.header-actions {
+    flex-shrink: 0;
 }
 
 @media (max-width: 640.98px) {

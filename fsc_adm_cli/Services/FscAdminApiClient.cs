@@ -12,6 +12,7 @@ namespace fsc_adm_cli.Services
         private readonly HttpClient _httpClient;
         private readonly string _adminApiToken;
         private readonly string _name_api_token = "X-Api-Key";
+        private bool _hasAdminSession;
 
         public FscAdminApiClient(string serviceUrl, string apiToken)
         {
@@ -19,7 +20,9 @@ namespace fsc_adm_cli.Services
             var handler = new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator,
-                AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip
+                AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip,
+                CookieContainer = new CookieContainer(),
+                UseCookies = true
             };
 
             _httpClient = new HttpClient(handler)
@@ -33,17 +36,19 @@ namespace fsc_adm_cli.Services
 
         public Task<IReadOnlyList<TenantDto>> GetTenantsAsync(CancellationToken cancellationToken = default)
         {
-            return GetJsonAsync<IReadOnlyList<TenantDto>>("api/admin/tenants", cancellationToken);
+            return GetJsonAsync<IReadOnlyList<TenantDto>>("ui-api/tenants", cancellationToken);
         }
 
         public Task<TenantDto> GetTenantByIdAsync(Guid tenantId, CancellationToken cancellationToken = default)
         {
-            return GetJsonAsync<TenantDto>($"api/admin/tenants/{tenantId}", cancellationToken);
+            return GetJsonAsync<TenantDto>($"ui-api/tenants/{tenantId}", cancellationToken);
         }
 
         public async Task<TenantDto?> GetMyTenantAsync(CancellationToken cancellationToken = default)
         {
-            using var response = await _httpClient.GetAsync("api/admin/tenant/me", cancellationToken).ConfigureAwait(false);
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var response = await _httpClient.GetAsync("ui-api/tenant/me", cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return null;
 
@@ -52,7 +57,9 @@ namespace fsc_adm_cli.Services
 
         public async Task<TenantDto> CreateTenantAsync(string name, CancellationToken cancellationToken = default)
         {
-            using var request = CreateJsonRequest(HttpMethod.Post, "api/admin/tenants", new { name }, _adminApiToken);
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var request = CreateJsonRequest(HttpMethod.Post, "ui-api/tenants", new { name });
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
             return await ReadRequiredJsonAsync<TenantDto>(response, "Failed to create tenant", cancellationToken).ConfigureAwait(false);
@@ -60,20 +67,37 @@ namespace fsc_adm_cli.Services
 
         public Task<IReadOnlyList<ApiTokenDto>> GetTenantTokensAsync(Guid tenantId, CancellationToken cancellationToken = default)
         {
-            return GetJsonAsync<IReadOnlyList<ApiTokenDto>>($"api/admin/tenants/{tenantId}/tokens", cancellationToken);
+            return GetJsonAsync<IReadOnlyList<ApiTokenDto>>($"ui-api/api-tokens?tenantId={tenantId}", cancellationToken);
         }
 
         public async Task<CreatedApiTokenResult> CreateApiTokenAsync(CreateApiTokenRequest request, CancellationToken cancellationToken = default)
         {
-            using var httpRequest = CreateJsonRequest(HttpMethod.Post, "api/admin/tokens", request, _adminApiToken);
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var httpRequest = CreateJsonRequest(HttpMethod.Post, "ui-api/api-tokens", request);
             using var response = await _httpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
 
-            return await ReadRequiredJsonAsync<CreatedApiTokenResult>(response, "Failed to create API token", cancellationToken).ConfigureAwait(false);
+            var result = await ReadRequiredJsonAsync<CreatedApiTokenResponse>(response, "Failed to create API token", cancellationToken).ConfigureAwait(false);
+            return new CreatedApiTokenResult(
+                new ApiTokenDto(
+                    result.Id,
+                    result.TenantId,
+                    result.Name,
+                    result.TokenPrefix,
+                    true,
+                    result.Scopes.Contains("files.read", StringComparer.OrdinalIgnoreCase),
+                    result.Scopes.Contains("files.write", StringComparer.OrdinalIgnoreCase),
+                    result.Scopes.Contains("files.delete", StringComparer.OrdinalIgnoreCase),
+                    result.IsAdmin,
+                    result.ExpiresUtc),
+                result.Token);
         }
 
         public async Task RevokeApiTokenAsync(Guid tokenId, CancellationToken cancellationToken = default)
         {
-            using var request = CreateRequest(HttpMethod.Post, $"api/admin/tokens/{tokenId}/revoke", _adminApiToken);
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var request = CreateRequest(HttpMethod.Post, $"ui-api/api-tokens/{tokenId}/disable");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.IsSuccessStatusCode)
                 return;
@@ -90,7 +114,7 @@ namespace fsc_adm_cli.Services
             string? externalKey,
             CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "api/file/upload");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "api/files");
             request.Headers.Add(_name_api_token, apiToken);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -113,22 +137,22 @@ namespace fsc_adm_cli.Services
 
         public Task<IReadOnlyList<StoredTenantFileDto>> GetFilesAsync(string apiToken, CancellationToken cancellationToken = default)
         {
-            return GetJsonWithTokenAsync<IReadOnlyList<StoredTenantFileDto>>(apiToken, "api/file", cancellationToken);
+            return GetJsonWithTokenAsync<IReadOnlyList<StoredTenantFileDto>>(apiToken, "api/files", cancellationToken);
         }
 
         public Task<StoredTenantFileDto?> TryGetFileInfoAsync(string apiToken, Guid fileGuid, CancellationToken cancellationToken = default)
         {
-            return GetOptionalJsonWithTokenAsync<StoredTenantFileDto>(apiToken, $"api/file/{fileGuid}", cancellationToken);
+            return GetOptionalJsonWithTokenAsync<StoredTenantFileDto>(apiToken, $"api/files/{fileGuid}/metadata", cancellationToken);
         }
 
         public Task<StoredTenantFileDto?> GetFileInfoAsync(string apiToken, Guid fileGuid, CancellationToken cancellationToken = default)
         {
-            return GetOptionalJsonWithTokenAsync<StoredTenantFileDto>(apiToken, $"api/file/{fileGuid}", cancellationToken);
+            return GetOptionalJsonWithTokenAsync<StoredTenantFileDto>(apiToken, $"api/files/{fileGuid}/metadata", cancellationToken);
         }
 
         public async Task<byte[]> DownloadFileAsync(string apiToken, Guid fileGuid, CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/file/{fileGuid}/download");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"api/files/{fileGuid}");
             request.Headers.Add(_name_api_token, apiToken);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -143,7 +167,7 @@ namespace fsc_adm_cli.Services
 
         public async Task DeleteFileAsync(string apiToken, Guid fileGuid, CancellationToken cancellationToken = default)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/file/{fileGuid}");
+            using var request = new HttpRequestMessage(HttpMethod.Delete, $"api/files/{fileGuid}");
             request.Headers.Add(_name_api_token, apiToken);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -156,7 +180,9 @@ namespace fsc_adm_cli.Services
 
         public async Task<FileStorageBackgroundTaskDto> QueueFileStorageConsistencyCheckAsync(CancellationToken cancellationToken = default)
         {
-            using var request = CreateRequest(HttpMethod.Post, "api/admin/storage/check-consistency", _adminApiToken);
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var request = CreateRequest(HttpMethod.Post, "ui-api/storage/check-consistency");
             using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
 
             return await ReadRequiredJsonAsync<FileStorageBackgroundTaskDto>(
@@ -167,7 +193,7 @@ namespace fsc_adm_cli.Services
 
         private Task<T> GetJsonAsync<T>(string path, CancellationToken cancellationToken)
         {
-            return GetJsonWithTokenCoreAsync<T>(_adminApiToken, path, cancellationToken);
+            return GetJsonWithCookieCoreAsync<T>(path, cancellationToken);
         }
 
         private Task<T> GetJsonWithTokenAsync<T>(string apiToken, string path, CancellationToken cancellationToken)
@@ -185,6 +211,17 @@ namespace fsc_adm_cli.Services
             if (response.StatusCode == HttpStatusCode.NotFound)
                 return default;
 
+            return await ReadRequiredJsonAsync<T>(response, $"Failed to GET {path}", cancellationToken).ConfigureAwait(false);
+        }
+
+        private async Task<T> GetJsonWithCookieCoreAsync<T>(string path, CancellationToken cancellationToken)
+        {
+            await EnsureAdminSessionAsync(cancellationToken).ConfigureAwait(false);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
             return await ReadRequiredJsonAsync<T>(response, $"Failed to GET {path}", cancellationToken).ConfigureAwait(false);
         }
 
@@ -232,11 +269,40 @@ namespace fsc_adm_cli.Services
             return request;
         }
 
+        private HttpRequestMessage CreateRequest(HttpMethod method, string path)
+        {
+            var request = new HttpRequestMessage(method, path);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return request;
+        }
+
         private HttpRequestMessage CreateJsonRequest<T>(HttpMethod method, string path, T payload, string apiToken)
         {
             var request = CreateRequest(method, path, apiToken);
             request.Content = JsonContent.Create(payload, options: JsonOptions.Default);
             return request;
+        }
+
+        private HttpRequestMessage CreateJsonRequest<T>(HttpMethod method, string path, T payload)
+        {
+            var request = CreateRequest(method, path);
+            request.Content = JsonContent.Create(payload, options: JsonOptions.Default);
+            return request;
+        }
+
+        private async Task EnsureAdminSessionAsync(CancellationToken cancellationToken)
+        {
+            if (_hasAdminSession)
+                return;
+
+            using var response = await _httpClient.PostAsJsonAsync(
+                "auth/login",
+                new { apiToken = _adminApiToken },
+                JsonOptions.Default,
+                cancellationToken).ConfigureAwait(false);
+
+            await ReadRequiredJsonAsync<AuthMeResponse>(response, "Failed to sign in to admin session", cancellationToken).ConfigureAwait(false);
+            _hasAdminSession = true;
         }
 
         public void Dispose()
@@ -296,6 +362,20 @@ namespace fsc_adm_cli.Services
     public sealed record CreatedApiTokenResult(
         [property: JsonPropertyName("token")] ApiTokenDto Token,
         [property: JsonPropertyName("plainTextToken")] string PlainTextToken);
+
+    public sealed record CreatedApiTokenResponse(
+        [property: JsonPropertyName("id")] Guid Id,
+        [property: JsonPropertyName("tenantId")] Guid TenantId,
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("tokenPrefix")] string TokenPrefix,
+        [property: JsonPropertyName("token")] string Token,
+        [property: JsonPropertyName("scopes")] string[] Scopes,
+        [property: JsonPropertyName("isAdmin")] bool IsAdmin,
+        [property: JsonPropertyName("expiresUtc")] DateTimeOffset? ExpiresUtc);
+
+    public sealed record AuthMeResponse(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("isAdmin")] bool IsAdmin);
 
     public sealed record StoredTenantFileDto(
         [property: JsonPropertyName("tenantFileId")] Guid TenantFileId,

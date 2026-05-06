@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using scp.filestorage.InterfacesService;
+using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.InterfacesService;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
@@ -43,9 +44,9 @@ namespace scp.filestorage.Security
 
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, result.TokenId.ToString()),
-                new Claim(ClaimTypes.Name, result.Name),
-                new Claim("auth_type", "api_token")
+                new(ClaimTypes.NameIdentifier, result.TokenId.ToString()),
+                new(ClaimTypes.Name, result.Name),
+                new("auth_type", "api_token")
             };
 
             if (result.TenantId.HasValue)
@@ -72,9 +73,10 @@ namespace scp.filestorage.Security
         {
             Response.StatusCode = StatusCodes.Status401Unauthorized;
             Response.ContentType = "application/json";
-            return Response.WriteAsync("""
-        {"error":"unauthorized","error_description":"API token is missing or invalid."}
-        """);
+            return Response.WriteAsJsonAsync(ApiErrorResponse.Create(
+                Context,
+                "Unauthorized",
+                "API token is missing or invalid."));
         }
 
         protected override Task HandleForbiddenAsync(AuthenticationProperties properties)
@@ -82,9 +84,10 @@ namespace scp.filestorage.Security
             _ = _apiAuthenticationAuditService.LogForbiddenAsync(Context, Context.RequestAborted);
             Response.StatusCode = StatusCodes.Status403Forbidden;
             Response.ContentType = "application/json";
-            return Response.WriteAsync("""
-        {"error":"forbidden","error_description":"Insufficient permissions."}
-        """);
+            return Response.WriteAsJsonAsync(ApiErrorResponse.Create(
+                Context,
+                "AccessDenied",
+                "Insufficient permissions."));
         }
     }
 }

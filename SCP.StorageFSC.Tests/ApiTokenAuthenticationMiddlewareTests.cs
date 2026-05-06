@@ -85,6 +85,54 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         Assert.True(current.IsAdmin);
     }
 
+    [Fact]
+    public async Task InvokeAsync_WhenWebUserPrincipalWithAdminRole_CreatesAdminContext()
+    {
+        var tenants = new InMemoryTenantRepository();
+        var nextCalled = false;
+        var sut = CreateMiddleware(_ => nextCalled = true);
+        var context = CreateContext(CreatePrincipal(
+            Guid.NewGuid(),
+            tenantId: null,
+            isAdmin: true,
+            authType: "web_user",
+            scopes: ["admin"]));
+
+        await sut.InvokeAsync(context, tenants);
+
+        Assert.True(nextCalled);
+
+        var current = Assert.IsType<CurrentTenantContext>(
+            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
+        Assert.Null(current.TenantId);
+        Assert.True(current.IsAdmin);
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenWebUserPrincipalWithTenantClaim_CreatesTenantContext()
+    {
+        var tenant = CreateTenant();
+        var tenants = new InMemoryTenantRepository(tenant);
+        var nextCalled = false;
+        var sut = CreateMiddleware(_ => nextCalled = true);
+        var context = CreateContext(CreatePrincipal(
+            Guid.NewGuid(),
+            tenant.Id,
+            isAdmin: false,
+            authType: "web_user",
+            scopes: ["files.read"]));
+
+        await sut.InvokeAsync(context, tenants);
+
+        Assert.True(nextCalled);
+
+        var current = Assert.IsType<CurrentTenantContext>(
+            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
+        Assert.Equal(tenant.Id, current.TenantId);
+        Assert.False(current.IsAdmin);
+        Assert.True(current.CanRead);
+    }
+
     private static ApiTokenAuthenticationMiddleware CreateMiddleware(Action<HttpContext> onNext)
     {
         return new ApiTokenAuthenticationMiddleware(
@@ -108,13 +156,18 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         return context;
     }
 
-    private static ClaimsPrincipal CreatePrincipal(Guid tokenId, Guid? tenantId, bool isAdmin, params string[] scopes)
+    private static ClaimsPrincipal CreatePrincipal(
+        Guid tokenId,
+        Guid? tenantId,
+        bool isAdmin,
+        string authType = "api_token",
+        params string[] scopes)
     {
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, tokenId.ToString()),
             new(ClaimTypes.Name, isAdmin ? "Admin" : "Tenant"),
-            new("auth_type", "api_token")
+            new("auth_type", authType)
         };
 
         if (tenantId.HasValue)
@@ -126,7 +179,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         foreach (var scope in scopes)
             claims.Add(new Claim("scope", scope));
 
-        var identity = new ClaimsIdentity(claims, "ApiKey");
+        var identity = new ClaimsIdentity(claims, authType == "web_user" ? "FscCookie" : "ApiKey");
         return new ClaimsPrincipal(identity);
     }
 
