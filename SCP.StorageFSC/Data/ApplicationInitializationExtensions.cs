@@ -30,6 +30,7 @@ namespace SCP.StorageFSC.Data
 
                 var dbInitializer = scope.ServiceProvider.GetRequiredService<IDbInitializer>();
                 await dbInitializer.InitializeAsync(cancellationToken);
+                await dbInitializer.InitializeDefaultValuesAsync(cancellationToken);
 
                 logger.LogInformation("Database initialization completed successfully.");
             }

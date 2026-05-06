@@ -2,6 +2,8 @@ using scp.filestorage.Data.Dto;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.InterfacesService;
 using scp.filestorage.Services;
+using scp.filestorage.Services.Auth;
+using scp.filestorage.Services.TwoFactor;
 using SCP.StorageFSC;
 using SCP.StorageFSC.Data;
 using SCP.StorageFSC.Data.Repositories;
@@ -63,6 +65,22 @@ builder.Services.AddScoped<IMultipartUploadSessionRepository, MultipartUploadSes
 builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRepository>();
 builder.Services.AddScoped<IBackgroundTaskRepository, BackgroundTaskRepository>();
 builder.Services.AddScoped<IStorageStatisticsRepository, StorageStatisticsRepository>();
+
+builder.Services.AddUserManagementRepositories();
+
+builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+
+builder.Services.AddScoped<IPasswordHashService, PasswordHashService>();
+builder.Services.AddScoped<IAuthenticationHashService, AuthenticationHashService>();
+
+builder.Services.Configure<TotpOptions>(
+    builder.Configuration.GetSection("Authentication:Totp"));
+
+builder.RegisterAuthenticationSecretProtection();
+builder.Services.AddScoped<ITotpService, TotpService>();
+builder.Services.AddScoped<IOneTimeCodeSender, OneTimeCodeSender>();
+builder.Services.AddScoped<IQrCodeService, QrCodeService>();
+
 
 builder.Services.Configure<FileStorageMultipartOptions>(
     builder.Configuration.GetSection("FileStorageMultipart"));

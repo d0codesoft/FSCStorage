@@ -1,5 +1,6 @@
 using Dapper;
 using Microsoft.Extensions.Logging;
+using scp.filestorage.Data.Schema;
 using System.Data;
 using System.Reflection;
 
@@ -18,6 +19,32 @@ namespace SCP.StorageFSC.Data
             _connectionFactory = connectionFactory;
             _schemas = LoadSchemasFromCurrentAssembly();
             _logger = logger;
+        }
+
+        public async Task InitializeDefaultValuesAsync(CancellationToken cancellationToken = default)
+        {
+            using var connection = _connectionFactory.CreateConnection();
+
+            try
+            {
+                connection.Open();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open database connection.");
+                throw;
+            }
+
+            try
+            {
+                var _schemaRole = new DbSchemaRole();
+                await _schemaRole.ApplyAsync(connection, null, _logger, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialize default values in the database.");
+                throw;
+            }
         }
 
         public async Task InitializeAsync(CancellationToken cancellationToken = default)
