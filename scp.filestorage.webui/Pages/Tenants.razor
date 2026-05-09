@@ -1,0 +1,286 @@
+@page "/tenants"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Tenants</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>Tenants</h1>
+        <p>@(isAdmin ? "Browse, open, edit, and remove storage tenants." : "Browse only the tenants linked to your current user.")</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        @if (isAdmin)
+        {
+            <RadzenButton Text="Add tenant" Icon="add_business" Click="@BeginCreateTenant" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (isAdmin && showEditor)
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>@(editingTenantId.HasValue ? "Edit tenant" : "New tenant")</h2>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelEdit">Close</button>
+            </div>
+
+            <EditForm Model="@tenantEditor" OnValidSubmit="@SaveTenantAsync">
+                <DataAnnotationsValidator />
+                <div class="admin-form-grid">
+                    <div>
+                        @if (isAdmin && !editingTenantId.HasValue)
+                        {
+                            <label class="form-label" for="tenant-owner">Owner user</label>
+                            <InputSelect id="tenant-owner" class="form-select" @bind-Value="tenantEditor.UserId">
+                                <option value="@Guid.Empty">Select user</option>
+                                @foreach (var user in users)
+                                {
+                                    <option value="@user.UserId">@user.UserName</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => tenantEditor.UserId)" />
+                        }
+                    </div>
+                    <div>
+                        <label class="form-label" for="tenant-name">Name</label>
+                        <InputText id="tenant-name" class="form-control" @bind-Value="tenantEditor.Name" />
+                        <ValidationMessage For="@(() => tenantEditor.Name)" />
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="tenant-active" class="form-check-input" @bind-Value="tenantEditor.IsActive" />
+                        <label class="form-check-label" for="tenant-active">Tenant is active</label>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn btn-primary" disabled="@isBusy">Save tenant</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelEdit" disabled="@isBusy">Cancel</button>
+                </div>
+            </EditForm>
+        </RadzenCard>
+    </section>
+}
+
+<section class="data-section">
+    @if (isBusy && tenants is null)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else if (tenants?.Count > 0)
+    {
+        <RadzenDataGrid Data="@tenants" TItem="TenantViewModel" AllowPaging="true" PageSize="10" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Tenant" Property="Name">
+                    <Template Context="tenant">
+                        <div class="primary-cell">@tenant.Name</div>
+                        <div class="secondary-cell">@tenant.TenantGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Status" Property="IsActive">
+                    <Template Context="tenant">
+                        <RadzenBadge BadgeStyle="@(tenant.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(tenant.IsActive ? "Active" : "Disabled")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Created UTC" Property="CreatedUtc">
+                    <Template Context="tenant">@FormatUtc(tenant.CreatedUtc)</Template>
+                </RadzenDataGridColumn>
+                @if (isAdmin)
+                {
+                    <RadzenDataGridColumn TItem="TenantViewModel" Title="User" Property="UserId">
+                        <Template Context="tenant">
+                            <div class="secondary-cell">@tenant.UserId</div>
+                        </Template>
+                    </RadzenDataGridColumn>
+                }
+                <RadzenDataGridColumn TItem="TenantViewModel" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="240px">
+                    <Template Context="tenant">
+                        <div class="button-row">
+                            <RadzenButton Text="Open" Icon="open_in_new" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => OpenTenant(tenant.Id))" />
+                            @if (isAdmin)
+                            {
+                                <RadzenButton Text="Edit" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginEditTenant(tenant))" />
+                                <RadzenButton Text="Delete" Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteTenantAsync(tenant))" />
+                            }
+                        </div>
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+    else
+    {
+        <RadzenCard class="empty-panel">
+            <RadzenIcon Icon="apartment" />
+            <span>No tenants available.</span>
+        </RadzenCard>
+    }
+</section>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    private IReadOnlyList<TenantViewModel>? tenants;
+    private IReadOnlyList<UserManagementViewModel> users = [];
+    private readonly TenantEditorModel tenantEditor = new();
+    private Guid? editingTenantId;
+    private bool showEditor;
+    private bool isBusy;
+    private bool isAdmin;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateTask;
+        isAdmin = authState.User.IsInRole("Admin");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            tenants = await ApiClient.GetTenantsAsync();
+            users = isAdmin
+                ? await ApiClient.GetUsersAsync()
+                : [];
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BeginCreateTenant()
+    {
+        errorMessage = null;
+        statusMessage = null;
+        editingTenantId = null;
+        tenantEditor.UserId = users.FirstOrDefault()?.UserId ?? Guid.Empty;
+        tenantEditor.Name = string.Empty;
+        tenantEditor.IsActive = true;
+        showEditor = true;
+    }
+
+    private void BeginEditTenant(TenantViewModel tenant)
+    {
+        errorMessage = null;
+        statusMessage = null;
+        editingTenantId = tenant.Id;
+        tenantEditor.UserId = tenant.UserId;
+        tenantEditor.Name = tenant.Name;
+        tenantEditor.IsActive = tenant.IsActive;
+        showEditor = true;
+    }
+
+    private void CancelEdit()
+    {
+        showEditor = false;
+        editingTenantId = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveTenantAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            var request = new TenantUpsertRequest
+            {
+                Name = tenantEditor.Name,
+                UserId = tenantEditor.UserId,
+                IsActive = tenantEditor.IsActive
+            };
+
+            if (editingTenantId.HasValue)
+            {
+                await ApiClient.UpdateTenantAsync(editingTenantId.Value, request);
+                statusMessage = "Tenant updated.";
+                await LoadAsync();
+            }
+            else
+            {
+                var created = await ApiClient.CreateTenantAsync(request);
+                statusMessage = "Tenant created.";
+                await LoadAsync();
+                Navigation.NavigateTo($"/tenants/{created.Id}");
+            }
+
+            showEditor = false;
+            editingTenantId = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void OpenTenant(Guid tenantId)
+    {
+        Navigation.NavigateTo($"/tenants/{tenantId}");
+    }
+
+    private async Task DeleteTenantAsync(TenantViewModel tenant)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete tenant '{tenant.Name}'?"))
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteTenantAsync(tenant.Id);
+            statusMessage = "Tenant deleted.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+}

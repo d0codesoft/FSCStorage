@@ -29,11 +29,13 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
     public async Task InvokeAsync_WhenNonAdminPrincipalWithTenantClaim_CreatesTenantContext()
     {
         var tenant = CreateTenant();
+        var tokenId = Guid.NewGuid();
+        var token = CreateToken(tokenId, Guid.NewGuid(), tenant.Id, isAdmin: false);
         var tenants = new InMemoryTenantRepository(tenant);
-        var tokens = new InMemoryApiTokenRepository();
+        var tokens = new InMemoryApiTokenRepository(token);
         var nextCalled = false;
         var sut = CreateMiddleware(_ => nextCalled = true);
-        var context = CreateContext(CreatePrincipal(Guid.NewGuid(), tenant.Id, isAdmin: false, scopes: ["read", "write", "delete"]));
+        var context = CreateContext(CreatePrincipal(tokenId, tenant.Id, isAdmin: false, scopes: ["read", "write", "delete"]));
 
         await sut.InvokeAsync(context, tenants, tokens);
 
@@ -50,34 +52,32 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenAdminPrincipalWithoutTenantHeader_CreatesAdminContextWithoutTenant()
+    public async Task InvokeAsync_WhenAdminPrincipalWithoutTenantHeader_DoesNotCreateTenantContext()
     {
+        var tokenId = Guid.NewGuid();
         var tenants = new InMemoryTenantRepository();
-        var tokens = new InMemoryApiTokenRepository();
+        var tokens = new InMemoryApiTokenRepository(CreateToken(tokenId, Guid.NewGuid(), tenantId: null, isAdmin: true));
         var nextCalled = false;
         var sut = CreateMiddleware(_ => nextCalled = true);
-        var context = CreateContext(CreatePrincipal(Guid.NewGuid(), tenantId: null, isAdmin: true, scopes: ["admin"]));
+        var context = CreateContext(CreatePrincipal(tokenId, tenantId: null, isAdmin: true, scopes: ["admin"]));
 
         await sut.InvokeAsync(context, tenants, tokens);
 
         Assert.True(nextCalled);
-
-        var current = Assert.IsType<CurrentTenantContext>(
-            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
-        Assert.Null(current.TenantId);
-        Assert.Null(current.TenantGuid);
-        Assert.True(current.IsAdmin);
+        Assert.Null(context.Items[TenantContextConstants.CurrentTenantContextItemName]);
     }
 
     [Fact]
     public async Task InvokeAsync_WhenAdminPrincipalWithTenantHeader_CreatesContextForRequestedTenant()
     {
         var tenant = CreateTenant();
+        var tokenId = Guid.NewGuid();
+        var token = CreateToken(tokenId, Guid.NewGuid(), tenantId: null, isAdmin: true);
         var tenants = new InMemoryTenantRepository(tenant);
-        var tokens = new InMemoryApiTokenRepository();
+        var tokens = new InMemoryApiTokenRepository(token);
         var nextCalled = false;
         var sut = CreateMiddleware(_ => nextCalled = true);
-        var context = CreateContext(CreatePrincipal(Guid.NewGuid(), tenantId: null, isAdmin: true, scopes: ["admin"]), tenant.ExternalTenantId);
+        var context = CreateContext(CreatePrincipal(tokenId, tenantId: null, isAdmin: true, scopes: ["admin"]), tenant.ExternalTenantId);
 
         await sut.InvokeAsync(context, tenants, tokens);
 
@@ -91,7 +91,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenWebUserPrincipalWithAdminRole_CreatesAdminContext()
+    public async Task InvokeAsync_WhenWebUserPrincipalWithAdminRole_DoesNotCreateTenantContext()
     {
         var tenants = new InMemoryTenantRepository();
         var tokens = new InMemoryApiTokenRepository();
@@ -107,15 +107,11 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         await sut.InvokeAsync(context, tenants, tokens);
 
         Assert.True(nextCalled);
-
-        var current = Assert.IsType<CurrentTenantContext>(
-            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
-        Assert.Null(current.TenantId);
-        Assert.True(current.IsAdmin);
+        Assert.Null(context.Items[TenantContextConstants.CurrentTenantContextItemName]);
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenWebUserPrincipalWithTenantClaim_CreatesTenantContext()
+    public async Task InvokeAsync_WhenWebUserPrincipalWithTenantClaim_DoesNotCreateTenantContext()
     {
         var tenant = CreateTenant();
         var tenants = new InMemoryTenantRepository(tenant);
@@ -132,20 +128,15 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         await sut.InvokeAsync(context, tenants, tokens);
 
         Assert.True(nextCalled);
-
-        var current = Assert.IsType<CurrentTenantContext>(
-            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
-        Assert.Equal(tenant.Id, current.TenantId);
-        Assert.False(current.IsAdmin);
-        Assert.True(current.CanRead);
+        Assert.Null(context.Items[TenantContextConstants.CurrentTenantContextItemName]);
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenWebUserPrincipalWithoutTenantClaim_LoadsFirstTokenAndTenantByUserId()
+    public async Task InvokeAsync_WhenWebUserPrincipalWithoutTenantClaim_DoesNotCreateTenantContext()
     {
         var userId = Guid.NewGuid();
         var tenant = CreateTenant(userId);
-        var token = CreateToken(userId, tenant.Id);
+        var token = CreateToken(Guid.NewGuid(), userId, tenant.Id, isAdmin: false);
         var tenants = new InMemoryTenantRepository(tenant);
         var tokens = new InMemoryApiTokenRepository(token);
         var nextCalled = false;
@@ -160,14 +151,7 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         await sut.InvokeAsync(context, tenants, tokens);
 
         Assert.True(nextCalled);
-
-        var current = Assert.IsType<CurrentTenantContext>(
-            context.Items[TenantContextConstants.CurrentTenantContextItemName]);
-        Assert.Equal(token.Id, current.TokenId);
-        Assert.Equal(tenant.Id, current.TenantId);
-        Assert.Equal(tenant.ExternalTenantId, current.TenantGuid);
-        Assert.False(current.IsAdmin);
-        Assert.True(current.CanRead);
+        Assert.Null(context.Items[TenantContextConstants.CurrentTenantContextItemName]);
     }
 
     private static ApiTokenAuthenticationMiddleware CreateMiddleware(Action<HttpContext> onNext)
@@ -233,17 +217,18 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         };
     }
 
-    private static ApiToken CreateToken(Guid userId, Guid? tenantId)
+    private static ApiToken CreateToken(Guid tokenId, Guid userId, Guid? tenantId, bool isAdmin)
     {
         return new ApiToken
         {
-            Id = Guid.NewGuid(),
+            Id = tokenId,
             UserId = userId,
             TenantId = tenantId,
             Name = "Test token",
             TokenHash = "hash",
             TokenPrefix = "prefix",
             IsActive = true,
+            IsAdmin = isAdmin,
             CanRead = true,
             CreatedUtc = DateTime.UtcNow
         };
@@ -277,6 +262,11 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
         public Task<Tenant?> GetFirstByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_tenants.OrderBy(tenant => tenant.CreatedUtc).ThenBy(tenant => tenant.Id).FirstOrDefault(tenant => tenant.UserId == userId));
+        }
+
+        public Task<IReadOnlyList<Tenant>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<Tenant>>(_tenants.Where(tenant => tenant.UserId == userId).ToList());
         }
 
         public Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
@@ -330,9 +320,24 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
             return Task.FromResult(_tokens.OrderBy(token => token.CreatedUtc).ThenBy(token => token.Id).FirstOrDefault(token => token.UserId == userId));
         }
 
+        public Task<IReadOnlyList<ApiToken>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ApiToken>>(_tokens.Where(token => token.UserId == userId).ToList());
+        }
+
         public Task<IReadOnlyList<ApiToken>> GetByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<ApiToken>>(_tokens.Where(token => token.TenantId == tenantId).ToList());
+        }
+
+        public Task<IReadOnlyList<ApiToken>> GetByTenantIdAndUserIdAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<ApiToken>>(_tokens.Where(token => token.TenantId == tenantId && token.UserId == userId).ToList());
+        }
+
+        public Task<bool> UpdateAsync(ApiToken token, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tokens.Any(item => item.Id == token.Id));
         }
 
         public Task<bool> UpdateLastUsedAsync(Guid id, DateTime lastUsedUtc, CancellationToken cancellationToken = default)

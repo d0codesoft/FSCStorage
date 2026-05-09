@@ -2,6 +2,7 @@ namespace scp.filestorage.Services
 {
     using scp.filestorage.Data.Models;
     using scp.filestorage.Data.Repositories;
+    using SCP.StorageFSC.InterfacesService;
     using SCP.StorageFSC.Data.Repositories;
 
     public sealed class FileStorageBackgroundService : BackgroundService
@@ -124,6 +125,18 @@ namespace scp.filestorage.Services
                             result.IsConsistent,
                             result.CheckedFiles,
                             result.Issues.Count);
+                        break;
+
+                    case FileStorageBackgroundTaskType.CleanupDeletedTenantFiles:
+                        var deletedTenantCleanupService = scope.ServiceProvider.GetRequiredService<IDeletedTenantCleanupService>();
+                        var cleanupResult = await deletedTenantCleanupService.CleanupAsync(cancellationToken);
+                        resultSummary = $"PendingTenants={cleanupResult.PendingTenantCount}; CleanedTenants={cleanupResult.CleanedTenantCount}; DeletedFiles={cleanupResult.DeletedFileCount}";
+                        _logger.LogInformation(
+                            "Deleted tenant cleanup task finished. TaskId={TaskId}, PendingTenants={PendingTenants}, CleanedTenants={CleanedTenants}, DeletedFiles={DeletedFiles}",
+                            task.TaskId,
+                            cleanupResult.PendingTenantCount,
+                            cleanupResult.CleanedTenantCount,
+                            cleanupResult.DeletedFileCount);
                         break;
 
                     default:

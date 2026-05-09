@@ -1,0 +1,490 @@
+@page "/tenants/{TenantId:guid}"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Tenant details</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>@(tenant?.Name ?? "Tenant details")</h1>
+        <p>@(isAdmin ? "Tenant profile, activation state, and API keys." : "Tenant profile and your API keys for this tenant.")</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToTenants" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (createdToken is not null)
+{
+    <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter">
+        <strong>Save this API token now:</strong>
+        <div class="token-once">@createdToken.Token</div>
+        <div class="secondary-cell">This value is shown only once after creation.</div>
+    </RadzenAlert>
+}
+
+@if (isBusy && tenant is null)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else if (notFound)
+{
+    <RadzenCard class="empty-panel">
+        <RadzenIcon Icon="error" />
+        <span>Tenant was not found.</span>
+    </RadzenCard>
+}
+else if (tenant is not null)
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>Tenant settings</h2>
+                @if (isAdmin)
+                {
+                    <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DeleteTenantAsync" disabled="@isBusy">Delete tenant</button>
+                }
+            </div>
+
+            <dl class="details-grid">
+                <dt>Tenant ID</dt>
+                <dd>@tenant.Id</dd>
+                <dt>Tenant GUID</dt>
+                <dd>@tenant.TenantGuid</dd>
+                <dt>User ID</dt>
+                <dd>@tenant.UserId</dd>
+                <dt>Created UTC</dt>
+                <dd>@FormatUtc(tenant.CreatedUtc)</dd>
+                <dt>Updated UTC</dt>
+                <dd>@FormatUtc(tenant.UpdatedUtc)</dd>
+            </dl>
+
+            @if (isAdmin)
+            {
+                <EditForm Model="@tenantEditor" OnValidSubmit="@SaveTenantAsync">
+                    <DataAnnotationsValidator />
+                    <div class="admin-form-grid">
+                        <div>
+                            <label class="form-label" for="tenant-details-name">Name</label>
+                            <InputText id="tenant-details-name" class="form-control" @bind-Value="tenantEditor.Name" />
+                            <ValidationMessage For="@(() => tenantEditor.Name)" />
+                        </div>
+                        <div class="form-check admin-check">
+                            <InputCheckbox id="tenant-details-active" class="form-check-input" @bind-Value="tenantEditor.IsActive" />
+                            <label class="form-check-label" for="tenant-details-active">Tenant is active</label>
+                        </div>
+                    </div>
+
+                    <div class="button-row">
+                        <button type="submit" class="btn btn-primary" disabled="@isBusy">Save tenant</button>
+                    </div>
+                </EditForm>
+            }
+        </RadzenCard>
+    </section>
+
+    <section class="data-section">
+        <div class="details-header">
+            <h2>@(isAdmin ? "API keys" : "Your API keys")</h2>
+            @if (isAdmin)
+            {
+                <div class="button-row">
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelTokenEdit" disabled="@isBusy">Cancel editor</button>
+                    <button type="button" class="btn btn-primary" @onclick="BeginCreateToken" disabled="@isBusy">Add API key</button>
+                </div>
+            }
+        </div>
+
+        @if (isAdmin && showTokenEditor)
+        {
+            <RadzenCard class="details-panel">
+                <div class="details-header">
+                    <h2>@(editingTokenId.HasValue ? "Edit API key" : "New API key")</h2>
+                </div>
+
+                <EditForm Model="@tokenEditor" OnValidSubmit="@SaveTokenAsync">
+                    <DataAnnotationsValidator />
+                    <div class="admin-form-grid">
+                        <div>
+                            <label class="form-label" for="token-name">Name</label>
+                            <InputText id="token-name" class="form-control" @bind-Value="tokenEditor.Name" />
+                            <ValidationMessage For="@(() => tokenEditor.Name)" />
+                        </div>
+                        <div>
+                            <label class="form-label" for="token-expires">Expires UTC</label>
+                            <InputText id="token-expires" class="form-control" @bind-Value="tokenEditor.ExpiresUtcText" placeholder="2026-05-09 18:30:00" />
+                            <div class="secondary-cell">Optional. Use UTC in `yyyy-MM-dd HH:mm:ss` format.</div>
+                        </div>
+                    </div>
+
+                    <div class="admin-check-grid">
+                        <div class="form-check admin-check">
+                            <InputCheckbox id="token-read" class="form-check-input" @bind-Value="tokenEditor.CanRead" />
+                            <label class="form-check-label" for="token-read">Read</label>
+                        </div>
+                        <div class="form-check admin-check">
+                            <InputCheckbox id="token-write" class="form-check-input" @bind-Value="tokenEditor.CanWrite" />
+                            <label class="form-check-label" for="token-write">Write</label>
+                        </div>
+                        <div class="form-check admin-check">
+                            <InputCheckbox id="token-delete" class="form-check-input" @bind-Value="tokenEditor.CanDelete" />
+                            <label class="form-check-label" for="token-delete">Delete</label>
+                        </div>
+                        <div class="form-check admin-check">
+                            <InputCheckbox id="token-admin" class="form-check-input" @bind-Value="tokenEditor.IsAdmin" />
+                            <label class="form-check-label" for="token-admin">Admin</label>
+                        </div>
+                        @if (editingTokenId.HasValue)
+                        {
+                            <div class="form-check admin-check">
+                                <InputCheckbox id="token-active" class="form-check-input" @bind-Value="tokenEditor.IsActive" />
+                                <label class="form-check-label" for="token-active">Key is active</label>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="button-row">
+                        <button type="submit" class="btn btn-primary" disabled="@isBusy">Save API key</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="CancelTokenEdit" disabled="@isBusy">Cancel</button>
+                    </div>
+                </EditForm>
+            </RadzenCard>
+        }
+
+        @if (tokens?.Count > 0)
+        {
+            <RadzenDataGrid Data="@tokens" TItem="ApiTokenViewModel" AllowPaging="true" PageSize="10" AllowSorting="true" class="app-grid">
+                <Columns>
+                    <RadzenDataGridColumn TItem="ApiTokenViewModel" Title="Key" Property="Name">
+                        <Template Context="tokenItem">
+                            <div class="primary-cell">@tokenItem.Name</div>
+                            <div class="secondary-cell">@tokenItem.TokenPrefix</div>
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ApiTokenViewModel" Title="Status" Property="IsActive">
+                        <Template Context="tokenItem">
+                            <RadzenBadge BadgeStyle="@(tokenItem.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(tokenItem.IsActive ? "Active" : "Disabled")" />
+                        </Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ApiTokenViewModel" Title="Scopes" Property="ScopesLabel" />
+                    <RadzenDataGridColumn TItem="ApiTokenViewModel" Title="Expires UTC" Property="ExpiresUtc">
+                        <Template Context="tokenItem">@FormatUtc(tokenItem.ExpiresUtc)</Template>
+                    </RadzenDataGridColumn>
+                    <RadzenDataGridColumn TItem="ApiTokenViewModel" Title="Last used UTC" Property="LastUsedUtc">
+                        <Template Context="tokenItem">@FormatUtc(tokenItem.LastUsedUtc)</Template>
+                    </RadzenDataGridColumn>
+                    @if (isAdmin)
+                    {
+                        <RadzenDataGridColumn TItem="ApiTokenViewModel" Filterable="false" Sortable="false" TextAlign="TextAlign.Right" Width="200px">
+                            <Template Context="tokenItem">
+                                <div class="button-row">
+                                    <RadzenButton Text="Edit" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginEditToken(tokenItem))" />
+                                    <RadzenButton Text="Delete" Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteTokenAsync(tokenItem))" />
+                                </div>
+                            </Template>
+                        </RadzenDataGridColumn>
+                    }
+                </Columns>
+            </RadzenDataGrid>
+        }
+        else
+        {
+            <RadzenCard class="empty-panel">
+                <RadzenIcon Icon="vpn_key" />
+                <span>@(isAdmin ? "No API keys for this tenant yet." : "You do not have API keys for this tenant yet.")</span>
+            </RadzenCard>
+        }
+    </section>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; } = default!;
+
+    [Parameter]
+    public Guid TenantId { get; set; }
+
+    private TenantViewModel? tenant;
+    private IReadOnlyList<ApiTokenViewModel>? tokens;
+    private readonly TenantEditorModel tenantEditor = new();
+    private readonly ApiTokenEditorModel tokenEditor = new();
+    private Guid? editingTokenId;
+    private CreatedApiTokenViewModel? createdToken;
+    private bool showTokenEditor;
+    private bool isBusy;
+    private bool isAdmin;
+    private bool notFound;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var authState = await AuthenticationStateTask;
+        isAdmin = authState.User.IsInRole("Admin");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        notFound = false;
+
+        try
+        {
+            tenant = await ApiClient.GetTenantAsync(TenantId);
+            if (tenant is null)
+            {
+                notFound = true;
+                tokens = [];
+                return;
+            }
+
+            tenantEditor.Name = tenant.Name;
+            tenantEditor.IsActive = tenant.IsActive;
+            tokens = await ApiClient.GetTenantTokensAsync(TenantId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SaveTenantAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            tenant = await ApiClient.UpdateTenantAsync(TenantId, new TenantUpsertRequest
+            {
+                Name = tenantEditor.Name,
+                IsActive = tenantEditor.IsActive
+            });
+
+            statusMessage = "Tenant updated.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BeginCreateToken()
+    {
+        createdToken = null;
+        errorMessage = null;
+        statusMessage = null;
+        editingTokenId = null;
+        tokenEditor.Name = string.Empty;
+        tokenEditor.CanRead = true;
+        tokenEditor.CanWrite = false;
+        tokenEditor.CanDelete = false;
+        tokenEditor.IsAdmin = false;
+        tokenEditor.IsActive = true;
+        tokenEditor.ExpiresUtcText = null;
+        showTokenEditor = true;
+    }
+
+    private void BeginEditToken(ApiTokenViewModel token)
+    {
+        createdToken = null;
+        errorMessage = null;
+        statusMessage = null;
+        editingTokenId = token.Id;
+        tokenEditor.Name = token.Name;
+        tokenEditor.CanRead = token.CanRead;
+        tokenEditor.CanWrite = token.CanWrite;
+        tokenEditor.CanDelete = token.CanDelete;
+        tokenEditor.IsAdmin = token.IsAdmin;
+        tokenEditor.IsActive = token.IsActive;
+        tokenEditor.ExpiresUtcText = FormatEditorUtc(token.ExpiresUtc);
+        showTokenEditor = true;
+    }
+
+    private void CancelTokenEdit()
+    {
+        showTokenEditor = false;
+        editingTokenId = null;
+        errorMessage = null;
+    }
+
+    private async Task SaveTokenAsync()
+    {
+        if (!TryParseUtc(tokenEditor.ExpiresUtcText, out var expiresUtc, out var validationError))
+        {
+            errorMessage = validationError;
+            return;
+        }
+
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            if (editingTokenId.HasValue)
+            {
+                await ApiClient.UpdateApiTokenAsync(editingTokenId.Value, new UpdateApiTokenRequestModel
+                {
+                    Name = tokenEditor.Name,
+                    CanRead = tokenEditor.CanRead,
+                    CanWrite = tokenEditor.CanWrite,
+                    CanDelete = tokenEditor.CanDelete,
+                    IsAdmin = tokenEditor.IsAdmin,
+                    IsActive = tokenEditor.IsActive,
+                    ExpiresUtc = expiresUtc
+                });
+
+                statusMessage = "API key updated.";
+            }
+            else
+            {
+                createdToken = await ApiClient.CreateApiTokenAsync(new CreateApiTokenRequestModel
+                {
+                    UserId = tenant.UserId,
+                    TenantId = TenantId,
+                    Name = tokenEditor.Name,
+                    CanRead = tokenEditor.CanRead,
+                    CanWrite = tokenEditor.CanWrite,
+                    CanDelete = tokenEditor.CanDelete,
+                    IsAdmin = tokenEditor.IsAdmin,
+                    ExpiresUtc = expiresUtc
+                });
+
+                statusMessage = "API key created.";
+            }
+
+            showTokenEditor = false;
+            editingTokenId = null;
+            tokens = await ApiClient.GetTenantTokensAsync(TenantId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task DeleteTenantAsync()
+    {
+        if (tenant is null)
+            return;
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete tenant '{tenant.Name}' and all tenant API keys? Physical files will be removed by a separate maintenance task."))
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteTenantAsync(tenant.Id);
+            Navigation.NavigateTo("/tenants");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task DeleteTokenAsync(ApiTokenViewModel token)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"Delete API key '{token.Name}'?"))
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteApiTokenAsync(token.Id);
+            statusMessage = "API key deleted.";
+            tokens = await ApiClient.GetTenantTokensAsync(TenantId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BackToTenants()
+    {
+        Navigation.NavigateTo("/tenants");
+    }
+
+    private static string FormatUtc(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss")
+            : "-";
+    }
+
+    private static string? FormatEditorUtc(DateTime? value)
+    {
+        return value?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static bool TryParseUtc(string? value, out DateTime? parsedUtc, out string? error)
+    {
+        parsedUtc = null;
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!DateTime.TryParse(value, out var parsed))
+        {
+            error = "Expires UTC must be a valid UTC date and time.";
+            return false;
+        }
+
+        parsedUtc = parsed.Kind switch
+        {
+            DateTimeKind.Utc => parsed,
+            DateTimeKind.Local => parsed.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+        };
+
+        return true;
+    }
+}

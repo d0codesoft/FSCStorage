@@ -195,6 +195,47 @@ namespace SCP.StorageFSC.Data.Repositories
             }
         }
 
+        public async Task<IReadOnlyList<Tenant>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    user_id AS UserId,
+                    external_tenant_id AS ExternalTenantId,
+                    name AS Name,
+                    is_active AS IsActive,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
+                FROM tenants
+                WHERE user_id = @UserId
+                ORDER BY created_utc, id;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var rows = await connection.QueryAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    new { UserId = userId },
+                    cancellationToken: cancellationToken));
+
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load tenants for user '{userId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load tenants for user '{userId}' due to database error.", ex);
+            }
+        }
+
         public async Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
         {
             const string sql = """

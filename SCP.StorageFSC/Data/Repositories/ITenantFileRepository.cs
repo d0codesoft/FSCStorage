@@ -14,5 +14,6 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<bool> SoftDeleteAsync(Guid id, DateTime deletedUtc, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
         Task<TenantFile?> GetByTenantAndExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<TenantFile>> GetByTenantIdsAsync(IReadOnlyCollection<Guid> tenantIds, CancellationToken cancellationToken = default);
     }
 }

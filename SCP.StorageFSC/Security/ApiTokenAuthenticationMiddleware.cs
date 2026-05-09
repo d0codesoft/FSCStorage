@@ -132,6 +132,9 @@ namespace SCP.StorageFSC.Security
             {
                 TokenId = tokenId,
                 TokenName = token.Name,
+                TenantId = currentTenant.Id,
+                TenantGuid = currentTenant.ExternalTenantId,
+                TenantName = currentTenant.Name,
                 IsAdmin = isAdmin,
                 CanRead = isAdmin || HasScope(user, "read") || HasScope(user, "files.read"),
                 CanWrite = isAdmin || HasScope(user, "write") || HasScope(user, "files.write"),

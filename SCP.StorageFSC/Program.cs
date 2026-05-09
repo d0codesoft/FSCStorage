@@ -65,6 +65,8 @@ builder.Services.AddScoped<IMultipartUploadSessionRepository, MultipartUploadSes
 builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRepository>();
 builder.Services.AddScoped<IBackgroundTaskRepository, BackgroundTaskRepository>();
 builder.Services.AddScoped<IStorageStatisticsRepository, StorageStatisticsRepository>();
+builder.Services.AddScoped<IDeletedTenantRepository, DeletedTenantRepository>();
+builder.Services.AddScoped<IDeletedTenantCleanupService, DeletedTenantCleanupService>();
 
 builder.Services.AddUserManagementRepositories();
 

@@ -428,6 +428,56 @@ h1:focus {
     border: 1px solid #e5e8ef;
 }
 
+.admin-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.admin-check-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.admin-check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.5rem;
+}
+
+.admin-check .form-check-input {
+    margin-top: 0;
+}
+
+.token-once {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    border: 1px dashed var(--rz-border-color);
+    border-radius: 8px;
+    background: var(--app-surface);
+    font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    overflow-wrap: anywhere;
+}
+
+.tenant-user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.tenant-user-list {
+    margin: 0.75rem 0 0;
+    padding-left: 1rem;
+}
+
+.tenant-user-list li {
+    margin-bottom: 0.5rem;
+}
+
 .details-header {
     display: flex;
     align-items: center;

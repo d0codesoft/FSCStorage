@@ -317,10 +317,18 @@ namespace SCP.StorageFSC.Data.Repositories
 
         public async Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
         {
+            return await DecrementReferenceCountAsync(id, 1, cancellationToken);
+        }
+
+        public async Task<bool> DecrementReferenceCountAsync(Guid id, int amount, CancellationToken cancellationToken = default)
+        {
+            if (amount <= 0)
+                throw new ArgumentOutOfRangeException(nameof(amount));
+
             const string sql = """
                 UPDATE stored_files
                 SET reference_count = CASE
-                    WHEN reference_count > 0 THEN reference_count - 1
+                    WHEN reference_count > @Amount THEN reference_count - @Amount
                     ELSE 0
                 END
                 WHERE id = @Id
@@ -332,7 +340,11 @@ namespace SCP.StorageFSC.Data.Repositories
                 using var connection = _connectionFactory.CreateConnection();
                 var affected = await connection.ExecuteAsync(new CommandDefinition(
                     sql,
-                    new { Id = id },
+                    new
+                    {
+                        Id = id,
+                        Amount = amount
+                    },
                     cancellationToken: cancellationToken));
 
                 return affected > 0;

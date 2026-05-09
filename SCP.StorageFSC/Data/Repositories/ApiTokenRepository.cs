@@ -352,6 +352,173 @@ namespace SCP.StorageFSC.Data.Repositories
             }
         }
 
+        public async Task<IReadOnlyList<ApiToken>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    user_id AS UserId,
+                    tenant_id AS TenantId,
+                    name AS Name,
+                    token_hash AS TokenHash,
+                    token_prefix AS TokenPrefix,
+                    is_active AS IsActive,
+                    is_admin AS IsAdmin,
+                    can_read AS CanRead,
+                    can_write AS CanWrite,
+                    can_delete AS CanDelete,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion,
+                    last_used_utc AS LastUsedUtc,
+                    expires_utc AS ExpiresUtc,
+                    revoked_utc AS RevokedUtc
+                FROM api_tokens
+                WHERE user_id = @UserId
+                ORDER BY created_utc, id;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var rows = await connection.QueryAsync<ApiToken>(new CommandDefinition(
+                    sql,
+                    new { UserId = userId },
+                    cancellationToken: cancellationToken));
+
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load API tokens for user '{userId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load API tokens for user '{userId}' due to database error.", ex);
+            }
+        }
+
+        public async Task<IReadOnlyList<ApiToken>> GetByTenantIdAndUserIdAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    user_id AS UserId,
+                    tenant_id AS TenantId,
+                    name AS Name,
+                    token_hash AS TokenHash,
+                    token_prefix AS TokenPrefix,
+                    is_active AS IsActive,
+                    is_admin AS IsAdmin,
+                    can_read AS CanRead,
+                    can_write AS CanWrite,
+                    can_delete AS CanDelete,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion,
+                    last_used_utc AS LastUsedUtc,
+                    expires_utc AS ExpiresUtc,
+                    revoked_utc AS RevokedUtc
+                FROM api_tokens
+                WHERE tenant_id = @TenantId
+                  AND user_id = @UserId
+                ORDER BY id;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var rows = await connection.QueryAsync<ApiToken>(new CommandDefinition(
+                    sql,
+                    new { TenantId = tenantId, UserId = userId },
+                    cancellationToken: cancellationToken));
+
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load API tokens for tenant '{tenantId}' and user '{userId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load API tokens for tenant '{tenantId}' and user '{userId}' due to database error.", ex);
+            }
+        }
+
+        public async Task<bool> UpdateAsync(ApiToken token, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                UPDATE api_tokens
+                SET
+                    user_id = @UserId,
+                    tenant_id = @TenantId,
+                    name = @Name,
+                    token_hash = @TokenHash,
+                    token_prefix = @TokenPrefix,
+                    is_active = @IsActive,
+                    is_admin = @IsAdmin,
+                    can_read = @CanRead,
+                    can_write = @CanWrite,
+                    can_delete = @CanDelete,
+                    last_used_utc = @LastUsedUtc,
+                    expires_utc = @ExpiresUtc,
+                    revoked_utc = @RevokedUtc,
+                    updated_utc = @UpdatedUtc,
+                    row_version = @RowVersion
+                WHERE id = @Id;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        token.Id,
+                        token.UserId,
+                        token.TenantId,
+                        token.Name,
+                        token.TokenHash,
+                        token.TokenPrefix,
+                        IsActive = token.IsActive ? 1 : 0,
+                        IsAdmin = token.IsAdmin ? 1 : 0,
+                        CanRead = token.CanRead ? 1 : 0,
+                        CanWrite = token.CanWrite ? 1 : 0,
+                        CanDelete = token.CanDelete ? 1 : 0,
+                        token.LastUsedUtc,
+                        token.ExpiresUtc,
+                        token.RevokedUtc,
+                        token.UpdatedUtc,
+                        token.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
+
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to update API token '{token.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to update API token '{token.Id}' due to database error.", ex);
+            }
+        }
+
         public async Task<bool> UpdateLastUsedAsync(Guid id, DateTime lastUsedUtc, CancellationToken cancellationToken = default)
         {
             const string sql = """
@@ -444,7 +611,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 UPDATE api_tokens
                 SET
                     is_active = 0,
-                    revoked_utc = @RevokedUtc
+                    revoked_utc = @RevokedUtc,
                     updated_utc = @UpdatedUtc,
                     row_version = @RowVersion
                 WHERE id = @Id;
@@ -486,7 +653,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 UPDATE api_tokens
                 SET
                     is_active = 0,
-                    revoked_utc = @RevokedUtc
+                    revoked_utc = @RevokedUtc,
                     updated_utc = @UpdatedUtc,
                     row_version = @RowVersion
                 WHERE id = @Id;

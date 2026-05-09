@@ -3,7 +3,8 @@ namespace scp.filestorage.Services
     public enum FileStorageBackgroundTaskType
     {
         MergeMultipartUpload = 0,
-        CheckDatabaseConsistency = 1
+        CheckDatabaseConsistency = 1,
+        CleanupDeletedTenantFiles = 2
     }
 
     public sealed record FileStorageBackgroundTask(
@@ -17,5 +18,8 @@ namespace scp.filestorage.Services
 
         public static FileStorageBackgroundTask CheckDatabaseConsistency() =>
             new(Guid.NewGuid(), FileStorageBackgroundTaskType.CheckDatabaseConsistency, Guid.Empty, DateTime.UtcNow);
+
+        public static FileStorageBackgroundTask CleanupDeletedTenantFiles() =>
+            new(Guid.NewGuid(), FileStorageBackgroundTaskType.CleanupDeletedTenantFiles, Guid.Empty, DateTime.UtcNow);
     }
 }

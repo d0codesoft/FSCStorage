@@ -12,6 +12,7 @@
     <div class="button-row">
         <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Light" />
         <RadzenButton Text="Check files" Icon="playlist_add_check" Click="@QueueConsistencyCheckAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Primary" />
+        <RadzenButton Text="Cleanup deleted tenants" Icon="cleaning_services" Click="@QueueDeletedTenantCleanupAsync" Disabled="@isLoading" ButtonStyle="ButtonStyle.Warning" />
     </div>
 </div>
 
@@ -117,6 +118,26 @@
         try
         {
             await ApiClient.QueueConsistencyCheckAsync();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task QueueDeletedTenantCleanupAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            await ApiClient.QueueDeletedTenantCleanupAsync();
             await LoadAsync();
         }
         catch (Exception ex)

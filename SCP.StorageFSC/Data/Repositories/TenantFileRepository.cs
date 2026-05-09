@@ -360,6 +360,55 @@ namespace SCP.StorageFSC.Data.Repositories
             }
         }
 
+        public async Task<IReadOnlyList<TenantFile>> GetByTenantIdsAsync(IReadOnlyCollection<Guid> tenantIds, CancellationToken cancellationToken = default)
+        {
+            if (tenantIds.Count == 0)
+                return [];
+
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    tenant_id AS TenantId,
+                    stored_file_id AS StoredFileId,
+                    file_guid AS FileGuid,
+                    file_name AS FileName,
+                    category AS Category,
+                    external_key AS ExternalKey,
+                    is_active AS IsActive,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion,
+                    deleted_utc AS DeletedUtc
+                FROM tenant_files
+                WHERE tenant_id IN @TenantIds
+                  AND is_active = 1
+                ORDER BY tenant_id, id;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                var rows = await connection.QueryAsync<TenantFile>(new CommandDefinition(
+                    sql,
+                    new { TenantIds = tenantIds },
+                    cancellationToken: cancellationToken));
+
+                return rows.ToList();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException("Failed to load tenant files for multiple tenants due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException("Failed to load tenant files for multiple tenants due to database error.", ex);
+            }
+        }
+
         public async Task<TenantFile?> GetByTenantAndExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default)
         {
             const string sql = """

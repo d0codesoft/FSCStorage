@@ -1,0 +1,544 @@
+@page "/users"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject IJSRuntime JS
+
+<PageTitle>Users</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>Users</h1>
+        <p>Create, edit, block, and remove users. Tenants and API keys are managed under the owning user.</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Add user" Icon="person_add" Click="@BeginCreateUser" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (showUserEditor)
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>@(editingUserId.HasValue ? "Edit user" : "New user")</h2>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelUserEdit">Close</button>
+            </div>
+
+            <EditForm Model="@userEditor" OnValidSubmit="@SaveUserAsync">
+                <DataAnnotationsValidator />
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="user-name">User name</label>
+                        <InputText id="user-name" class="form-control" @bind-Value="userEditor.Name" />
+                        <ValidationMessage For="@(() => userEditor.Name)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="user-email">Email</label>
+                        <InputText id="user-email" class="form-control" @bind-Value="userEditor.Email" />
+                        <ValidationMessage For="@(() => userEditor.Email)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="user-password">@(editingUserId.HasValue ? "New password (optional)" : "Password")</label>
+                        <InputText id="user-password" class="form-control" type="password" @bind-Value="userEditor.Password" />
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="user-active" class="form-check-input" @bind-Value="userEditor.IsActive" />
+                        <label class="form-check-label" for="user-active">User is active</label>
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="user-admin" class="form-check-input" @bind-Value="userEditor.IsAdmin" />
+                        <label class="form-check-label" for="user-admin">Administrator</label>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn btn-primary" disabled="@isBusy">Save user</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelUserEdit" disabled="@isBusy">Cancel</button>
+                </div>
+            </EditForm>
+        </RadzenCard>
+    </section>
+}
+
+@if (showTenantEditor)
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>New tenant for @selectedUserName</h2>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelTenantEdit">Close</button>
+            </div>
+
+            <EditForm Model="@tenantEditor" OnValidSubmit="@SaveTenantAsync">
+                <DataAnnotationsValidator />
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="tenant-name">Tenant name</label>
+                        <InputText id="tenant-name" class="form-control" @bind-Value="tenantEditor.Name" />
+                        <ValidationMessage For="@(() => tenantEditor.Name)" />
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="tenant-active" class="form-check-input" @bind-Value="tenantEditor.IsActive" />
+                        <label class="form-check-label" for="tenant-active">Tenant is active</label>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn btn-primary" disabled="@isBusy">Create tenant</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelTenantEdit" disabled="@isBusy">Cancel</button>
+                </div>
+            </EditForm>
+        </RadzenCard>
+    </section>
+}
+
+@if (showTokenEditor)
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>New API key for @selectedUserName</h2>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelTokenEdit">Close</button>
+            </div>
+
+            <EditForm Model="@tokenEditor" OnValidSubmit="@SaveTokenAsync">
+                <DataAnnotationsValidator />
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="token-tenant">Tenant</label>
+                        <InputSelect id="token-tenant" class="form-select" @bind-Value="selectedTokenTenantId">
+                            <option value="@Guid.Empty">Select tenant</option>
+                            @foreach (var tenant in selectedUserTenants)
+                            {
+                                <option value="@tenant.Id">@tenant.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label class="form-label" for="token-name">Key name</label>
+                        <InputText id="token-name" class="form-control" @bind-Value="tokenEditor.Name" />
+                        <ValidationMessage For="@(() => tokenEditor.Name)" />
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="token-read" class="form-check-input" @bind-Value="tokenEditor.CanRead" />
+                        <label class="form-check-label" for="token-read">Read</label>
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="token-write" class="form-check-input" @bind-Value="tokenEditor.CanWrite" />
+                        <label class="form-check-label" for="token-write">Write</label>
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="token-delete" class="form-check-input" @bind-Value="tokenEditor.CanDelete" />
+                        <label class="form-check-label" for="token-delete">Delete</label>
+                    </div>
+                    <div class="form-check admin-check">
+                        <InputCheckbox id="token-admin" class="form-check-input" @bind-Value="tokenEditor.IsAdmin" />
+                        <label class="form-check-label" for="token-admin">Admin</label>
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <button type="submit" class="btn btn-primary" disabled="@isBusy">Create API key</button>
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelTokenEdit" disabled="@isBusy">Cancel</button>
+                </div>
+            </EditForm>
+        </RadzenCard>
+    </section>
+}
+
+@if (createdToken is not null)
+{
+    <section class="data-section">
+        <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter">
+            <div><strong>Copy the API key now.</strong></div>
+            <div>Name: @createdToken.Name</div>
+            <div>Prefix: @createdToken.TokenPrefix</div>
+            <div class="secondary-cell">@createdToken.Token</div>
+        </RadzenAlert>
+    </section>
+}
+
+<section class="data-section">
+    @if (isBusy && users is null)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else if (users?.Count > 0)
+    {
+        <div class="tenant-user-grid">
+            @foreach (var user in users)
+            {
+                <RadzenCard class="details-panel">
+                    <div class="details-header">
+                        <div>
+                            <div class="primary-cell">@user.UserName</div>
+                            <div class="secondary-cell">@user.Email</div>
+                        </div>
+                        <div class="button-row">
+                            <RadzenButton Text="Edit" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginEditUser(user))" />
+                            <RadzenButton Text="Add tenant" Icon="add_business" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginCreateTenant(user))" />
+                            <RadzenButton Text="Add API key" Icon="vpn_key" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginCreateToken(user))" Disabled="@(user.Tenants.Count == 0)" />
+                            <RadzenButton Text="@(user.IsLocked ? "Unblock" : "Block")" Icon="@(user.IsLocked ? "lock_open" : "lock")" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Warning" Click="@(() => ToggleBlockUserAsync(user))" />
+                            <RadzenButton Text="Delete" Icon="delete" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Danger" Click="@(() => DeleteUserAsync(user))" />
+                        </div>
+                    </div>
+
+                    <div class="secondary-cell">User ID: @user.UserId</div>
+                    <div class="secondary-cell">Status: @(user.IsActive ? "Active" : "Disabled") / @(user.IsLocked ? "Blocked" : "Unblocked")</div>
+                    <div class="secondary-cell">Role: @(user.IsAdmin ? "Administrator" : "User")</div>
+
+                    <h3>Tenants</h3>
+                    @if (user.Tenants.Count > 0)
+                    {
+                        <ul class="tenant-user-list">
+                            @foreach (var tenant in user.Tenants)
+                            {
+                                <li>
+                                    <a href="@($"/tenants/{tenant.Id}")">@tenant.Name</a>
+                                    <div class="secondary-cell">@tenant.TenantGuid</div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="secondary-cell">No tenants assigned.</div>
+                    }
+
+                    <h3>API keys</h3>
+                    @if (user.ApiTokens.Count > 0)
+                    {
+                        <ul class="tenant-user-list">
+                            @foreach (var token in user.ApiTokens)
+                            {
+                                <li>
+                                    <div class="primary-cell">@token.Name</div>
+                                    <div class="secondary-cell">@token.TenantName</div>
+                                    <div class="secondary-cell">@token.TokenPrefix • @token.ScopesLabel • @(token.IsActive ? "Active" : "Disabled")</div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="secondary-cell">No API keys assigned.</div>
+                    }
+                </RadzenCard>
+            }
+        </div>
+    }
+    else
+    {
+        <RadzenCard class="empty-panel">
+            <RadzenIcon Icon="group" />
+            <span>No users available.</span>
+        </RadzenCard>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<UserManagementViewModel>? users;
+    private readonly UserEditorModel userEditor = new();
+    private readonly TenantEditorModel tenantEditor = new();
+    private readonly ApiTokenEditorModel tokenEditor = new();
+    private Guid? editingUserId;
+    private Guid selectedUserId;
+    private Guid selectedTokenTenantId;
+    private string selectedUserName = string.Empty;
+    private IReadOnlyList<TenantViewModel> selectedUserTenants = [];
+    private CreatedApiTokenViewModel? createdToken;
+    private bool showUserEditor;
+    private bool showTenantEditor;
+    private bool showTokenEditor;
+    private bool isBusy;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            users = await ApiClient.GetUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BeginCreateUser()
+    {
+        editingUserId = null;
+        userEditor.Name = string.Empty;
+        userEditor.Email = string.Empty;
+        userEditor.Password = string.Empty;
+        userEditor.IsActive = true;
+        userEditor.IsAdmin = false;
+        showUserEditor = true;
+        errorMessage = null;
+        statusMessage = null;
+    }
+
+    private void BeginEditUser(UserManagementViewModel user)
+    {
+        editingUserId = user.UserId;
+        userEditor.Name = user.UserName;
+        userEditor.Email = user.Email;
+        userEditor.Password = string.Empty;
+        userEditor.IsActive = user.IsActive;
+        userEditor.IsAdmin = user.IsAdmin;
+        showUserEditor = true;
+        errorMessage = null;
+        statusMessage = null;
+    }
+
+    private void CancelUserEdit()
+    {
+        showUserEditor = false;
+        editingUserId = null;
+    }
+
+    private void BeginCreateTenant(UserManagementViewModel user)
+    {
+        selectedUserId = user.UserId;
+        selectedUserName = user.UserName;
+        tenantEditor.UserId = user.UserId;
+        tenantEditor.Name = string.Empty;
+        tenantEditor.IsActive = true;
+        showTenantEditor = true;
+        errorMessage = null;
+        statusMessage = null;
+    }
+
+    private void CancelTenantEdit()
+    {
+        showTenantEditor = false;
+    }
+
+    private void BeginCreateToken(UserManagementViewModel user)
+    {
+        selectedUserId = user.UserId;
+        selectedUserName = user.UserName;
+        selectedUserTenants = user.Tenants;
+        selectedTokenTenantId = user.Tenants.FirstOrDefault()?.Id ?? Guid.Empty;
+        tokenEditor.Name = string.Empty;
+        tokenEditor.CanRead = true;
+        tokenEditor.CanWrite = false;
+        tokenEditor.CanDelete = false;
+        tokenEditor.IsAdmin = false;
+        tokenEditor.IsActive = true;
+        showTokenEditor = true;
+        createdToken = null;
+        errorMessage = null;
+        statusMessage = null;
+    }
+
+    private void CancelTokenEdit()
+    {
+        showTokenEditor = false;
+    }
+
+    private async Task SaveUserAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            if (editingUserId.HasValue)
+            {
+                await ApiClient.UpdateUserAsync(editingUserId.Value, new UpdateUserRequestModel
+                {
+                    Name = userEditor.Name,
+                    Email = userEditor.Email,
+                    Password = string.IsNullOrWhiteSpace(userEditor.Password) ? null : userEditor.Password,
+                    IsActive = userEditor.IsActive,
+                    IsAdmin = userEditor.IsAdmin
+                });
+
+                statusMessage = "User updated.";
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(userEditor.Password))
+                    throw new InvalidOperationException("Password is required for a new user.");
+
+                await ApiClient.CreateUserAsync(new CreateUserRequestModel
+                {
+                    Name = userEditor.Name,
+                    Email = userEditor.Email,
+                    Password = userEditor.Password,
+                    IsActive = userEditor.IsActive,
+                    IsAdmin = userEditor.IsAdmin
+                });
+
+                statusMessage = "User created.";
+            }
+
+            showUserEditor = false;
+            editingUserId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SaveTenantAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await ApiClient.CreateTenantAsync(new TenantUpsertRequest
+            {
+                UserId = selectedUserId,
+                Name = tenantEditor.Name,
+                IsActive = tenantEditor.IsActive
+            });
+
+            showTenantEditor = false;
+            statusMessage = "Tenant created.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SaveTokenAsync()
+    {
+        if (selectedTokenTenantId == Guid.Empty)
+        {
+            errorMessage = "Select a tenant for the API key.";
+            return;
+        }
+
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            createdToken = await ApiClient.CreateApiTokenAsync(new CreateApiTokenRequestModel
+            {
+                UserId = selectedUserId,
+                TenantId = selectedTokenTenantId,
+                Name = tokenEditor.Name,
+                CanRead = tokenEditor.CanRead,
+                CanWrite = tokenEditor.CanWrite,
+                CanDelete = tokenEditor.CanDelete,
+                IsAdmin = tokenEditor.IsAdmin
+            });
+
+            showTokenEditor = false;
+            statusMessage = "API key created.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ToggleBlockUserAsync(UserManagementViewModel user)
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            if (user.IsLocked)
+            {
+                await ApiClient.UnblockUserAsync(user.UserId);
+                statusMessage = "User unblocked.";
+            }
+            else
+            {
+                await ApiClient.BlockUserAsync(user.UserId);
+                statusMessage = "User blocked.";
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task DeleteUserAsync(UserManagementViewModel user)
+    {
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete user '{user.UserName}' with all linked tenants and API keys? Physical files will be removed by a separate maintenance task.");
+
+        if (!confirmed)
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteUserAsync(user.UserId);
+            statusMessage = "User deleted. Tenant file cleanup was queued as a background maintenance task.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

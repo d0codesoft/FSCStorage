@@ -346,11 +346,16 @@ public sealed class FileStorageServiceTests : IDisposable
 
         public Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
         {
+            return DecrementReferenceCountAsync(id, 1, cancellationToken);
+        }
+
+        public Task<bool> DecrementReferenceCountAsync(Guid id, int amount, CancellationToken cancellationToken = default)
+        {
             var item = _items.FirstOrDefault(file => file.Id == id);
             if (item is null)
                 return Task.FromResult(false);
 
-            item.ReferenceCount--;
+            item.ReferenceCount = Math.Max(0, item.ReferenceCount - amount);
             return Task.FromResult(true);
         }
 
@@ -441,6 +446,12 @@ public sealed class FileStorageServiceTests : IDisposable
         public Task<TenantFile?> GetByTenantAndExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.FirstOrDefault(file => file.TenantId == tenantId && file.ExternalKey == externalKey && file.IsActive));
+        }
+
+        public Task<IReadOnlyList<TenantFile>> GetByTenantIdsAsync(IReadOnlyCollection<Guid> tenantIds, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<TenantFile>>(
+                _items.Where(file => tenantIds.Contains(file.TenantId) && file.IsActive).ToList());
         }
     }
 }

@@ -11,6 +11,7 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<IReadOnlyList<StoredFile>> GetActiveAsync(CancellationToken cancellationToken = default);
         Task<bool> IncrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default);
         Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default);
+        Task<bool> DecrementReferenceCountAsync(Guid id, int amount, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<StoredFile>> GetOrphanFilesAsync(CancellationToken cancellationToken = default);
         Task<bool> MarkDeletedAsync(Guid id, DateTime deletedUtc, CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);

@@ -398,11 +398,16 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
 
         public Task<bool> DecrementReferenceCountAsync(Guid id, CancellationToken cancellationToken = default)
         {
+            return DecrementReferenceCountAsync(id, 1, cancellationToken);
+        }
+
+        public Task<bool> DecrementReferenceCountAsync(Guid id, int amount, CancellationToken cancellationToken = default)
+        {
             var file = _items.FirstOrDefault(item => item.Id == id);
             if (file is null)
                 return Task.FromResult(false);
 
-            file.ReferenceCount = Math.Max(0, file.ReferenceCount - 1);
+            file.ReferenceCount = Math.Max(0, file.ReferenceCount - amount);
             return Task.FromResult(true);
         }
 
