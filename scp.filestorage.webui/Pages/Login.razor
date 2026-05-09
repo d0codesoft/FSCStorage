@@ -7,15 +7,40 @@
 
 <RadzenCard class="login-panel">
     <h1>Admin sign in</h1>
-    <p>Use an admin API token to open the storage console.</p>
+    <p>Use your user account to open the storage console.</p>
 
     <EditForm Model="@model" OnValidSubmit="SignInAsync">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
-        <RadzenFormField Text="API token" class="login-field">
-            <RadzenPassword id="api-token" @bind-Value="model.ApiToken" autocomplete="off" Style="width: 100%;" />
-        </RadzenFormField>
+        @if (!RequiresTwoFactor)
+        {
+            <RadzenFormField Text="Login" class="login-field">
+                <RadzenTextBox id="login" @bind-Value="model.Login" autocomplete="username" Style="width: 100%;" />
+            </RadzenFormField>
+
+            <RadzenFormField Text="Password" class="login-field">
+                <RadzenPassword id="password" @bind-Value="model.Password" autocomplete="current-password" Style="width: 100%;" />
+            </RadzenFormField>
+        }
+        else
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                Enter the @TwoFactorMethodLabel verification code.
+            </RadzenAlert>
+
+            <RadzenFormField Text="Verification code" class="login-field">
+                <RadzenTextBox id="verification-code" @bind-Value="model.VerificationCode" autocomplete="one-time-code" Style="width: 100%;" />
+            </RadzenFormField>
+
+            <RadzenCheckBox @bind-Value="model.UseRecoveryCode" Name="use-recovery-code" />
+            <RadzenLabel Text="Use recovery code" Component="use-recovery-code" class="rz-ms-2" />
+        }
+
+        <div class="login-field">
+            <RadzenCheckBox @bind-Value="model.Remember" Name="remember-session" />
+            <RadzenLabel Text="Remember this device" Component="remember-session" class="rz-ms-2" />
+        </div>
 
         @if (!string.IsNullOrWhiteSpace(errorMessage))
         {
@@ -24,7 +49,13 @@
             </RadzenAlert>
         }
 
-        <RadzenButton ButtonType="ButtonType.Submit" Text="@(isSubmitting ? "Checking..." : "Sign in")" Icon="login" Disabled="@isSubmitting" ButtonStyle="ButtonStyle.Primary" />
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@SubmitText" Icon="login" Disabled="@isSubmitting" ButtonStyle="ButtonStyle.Primary" />
+            @if (RequiresTwoFactor)
+            {
+                <RadzenButton Text="Back" Icon="arrow_back" Disabled="@isSubmitting" ButtonStyle="ButtonStyle.Light" Click="@ResetTwoFactor" />
+            }
+        </RadzenStack>
     </EditForm>
 </RadzenCard>
 
@@ -32,12 +63,42 @@
     private readonly LoginModel model = new();
     private bool isSubmitting;
     private string? errorMessage;
+    private string? challengeToken;
+    private string? twoFactorMethod;
+
+    private bool RequiresTwoFactor => !string.IsNullOrWhiteSpace(challengeToken);
+
+    private string SubmitText => isSubmitting
+        ? "Checking..."
+        : RequiresTwoFactor
+            ? "Verify"
+            : "Sign in";
+
+    private string TwoFactorMethodLabel => twoFactorMethod switch
+    {
+        "AuthenticatorApp" => "authenticator app",
+        "Email" => "email",
+        "Sms" => "SMS",
+        _ => "two-factor"
+    };
 
     private async Task SignInAsync()
     {
-        if (string.IsNullOrWhiteSpace(model.ApiToken))
+        if (RequiresTwoFactor)
         {
-            errorMessage = "Enter an API token.";
+            await CompleteTwoFactorAsync();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.Login))
+        {
+            errorMessage = "Enter a login.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.Password))
+        {
+            errorMessage = "Enter a password.";
             return;
         }
 
@@ -46,9 +107,29 @@
 
         try
         {
-            await AuthenticationStateProvider.SignInAsync(model.ApiToken.Trim());
-            await ApiClient.GetStorageStatisticsAsync(largestFilesLimit: 1);
-            Navigation.NavigateTo("");
+            var result = await AuthenticationStateProvider.SignInAsync(
+                model.Login.Trim(),
+                model.Password,
+                model.Remember,
+                string.IsNullOrWhiteSpace(model.TwoFactorCode) ? null : model.TwoFactorCode.Trim());
+
+            if (!string.IsNullOrWhiteSpace(result.ErrorMessage))
+            {
+                await AuthenticationStateProvider.SignOutAsync();
+                errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            if (result.RequiresTwoFactor && result.Challenge is not null)
+            {
+                challengeToken = result.Challenge.ChallengeToken;
+                twoFactorMethod = result.Challenge.TwoFactorMethod;
+                model.Password = string.Empty;
+                model.TwoFactorCode = string.Empty;
+                return;
+            }
+
+            await CompleteSignInAsync();
         }
         catch (Exception ex)
         {
@@ -61,8 +142,76 @@
         }
     }
 
+    private async Task CompleteTwoFactorAsync()
+    {
+        if (string.IsNullOrWhiteSpace(challengeToken))
+        {
+            ResetTwoFactor();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(model.VerificationCode))
+        {
+            errorMessage = model.UseRecoveryCode
+                ? "Enter a recovery code."
+                : "Enter a verification code.";
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+
+        try
+        {
+            if (model.UseRecoveryCode)
+            {
+                await AuthenticationStateProvider.VerifyRecoveryCodeAsync(
+                    challengeToken,
+                    model.VerificationCode.Trim(),
+                    model.Remember);
+            }
+            else
+            {
+                await AuthenticationStateProvider.VerifyTwoFactorAsync(
+                    challengeToken,
+                    model.VerificationCode.Trim(),
+                    model.Remember);
+            }
+
+            await CompleteSignInAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CompleteSignInAsync()
+    {
+        await ApiClient.GetStorageStatisticsAsync(largestFilesLimit: 1);
+        Navigation.NavigateTo("");
+    }
+
+    private void ResetTwoFactor()
+    {
+        challengeToken = null;
+        twoFactorMethod = null;
+        model.VerificationCode = string.Empty;
+        model.UseRecoveryCode = false;
+        errorMessage = null;
+    }
+
     private sealed class LoginModel
     {
-        public string ApiToken { get; set; } = string.Empty;
+        public string Login { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string TwoFactorCode { get; set; } = string.Empty;
+        public string VerificationCode { get; set; } = string.Empty;
+        public bool UseRecoveryCode { get; set; }
+        public bool Remember { get; set; }
     }
 }

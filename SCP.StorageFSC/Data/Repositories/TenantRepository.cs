@@ -21,6 +21,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 INSERT INTO tenants
                 (
                     id,
+                    user_id,
                     external_tenant_id,
                     name,
                     is_active,
@@ -31,6 +32,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 VALUES
                 (
                     @Id,
+                    @UserId,
                     @ExternalTenantId,
                     @Name,
                     @IsActive,
@@ -49,6 +51,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     new
                     {
                         Id = tenant.Id,
+                        UserId = tenant.UserId,
                         ExternalTenantId = tenant.ExternalTenantId,
                         tenant.Name,
                         IsActive = tenant.IsActive ? 1 : 0,
@@ -79,6 +82,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
@@ -117,6 +121,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
@@ -150,11 +155,52 @@ namespace SCP.StorageFSC.Data.Repositories
             }
         }
 
+        public async Task<Tenant?> GetFirstByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    user_id AS UserId,
+                    external_tenant_id AS ExternalTenantId,
+                    name AS Name,
+                    is_active AS IsActive,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion
+                FROM tenants
+                WHERE user_id = @UserId
+                ORDER BY created_utc, id
+                LIMIT 1;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<Tenant>(new CommandDefinition(
+                    sql,
+                    new { UserId = userId },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load first tenant for user '{userId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load first tenant for user '{userId}' due to database error.", ex);
+            }
+        }
+
         public async Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
         {
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
@@ -193,6 +239,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
@@ -231,6 +278,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 UPDATE tenants
                 SET
+                    user_id = @UserId,
                     external_tenant_id = @ExternalTenantId,
                     name = @Name,
                     is_active = @IsActive,
@@ -248,6 +296,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     new
                     {
                         Id = tenant.Id,
+                        UserId = tenant.UserId,
                         ExternalTenantId = tenant.ExternalTenantId,
                         tenant.Name,
                         IsActive = tenant.IsActive ? 1 : 0,

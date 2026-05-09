@@ -80,6 +80,7 @@ namespace scp.filestorage.Data.Repositories
         public async Task<Role?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             const string sql = RoleSelectSql + """
+
                 WHERE id = @Id
                 LIMIT 1;
                 """;
@@ -112,6 +113,7 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = RoleSelectSql + """
+
                 WHERE normalized_name = @NormalizedName
                 LIMIT 1;
                 """;
@@ -146,6 +148,7 @@ namespace scp.filestorage.Data.Repositories
         public async Task<IReadOnlyList<Role>> GetAllAsync(CancellationToken cancellationToken = default)
         {
             const string sql = RoleSelectSql + """
+
                 ORDER BY normalized_name;
                 """;
 
@@ -176,6 +179,7 @@ namespace scp.filestorage.Data.Repositories
         public async Task<IReadOnlyList<Role>> GetSystemRolesAsync(CancellationToken cancellationToken = default)
         {
             const string sql = RoleSelectSql + """
+
                 WHERE is_system = 1
                 ORDER BY normalized_name;
                 """;

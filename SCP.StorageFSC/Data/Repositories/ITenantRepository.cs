@@ -7,6 +7,7 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<bool> InsertAsync(Tenant tenant, CancellationToken cancellationToken = default);
         Task<Tenant?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<Tenant?> GetByGuidAsync(Guid tenantGuid, CancellationToken cancellationToken = default);
+        Task<Tenant?> GetFirstByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
         Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<bool> UpdateAsync(Tenant tenant, CancellationToken cancellationToken = default);

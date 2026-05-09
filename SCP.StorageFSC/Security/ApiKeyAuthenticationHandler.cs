@@ -46,7 +46,7 @@ namespace scp.filestorage.Security
             {
                 new(ClaimTypes.NameIdentifier, result.TokenId.ToString()),
                 new(ClaimTypes.Name, result.Name),
-                new("auth_type", "api_token")
+                new("auth_type", AuthType.ApiToken)
             };
 
             if (result.TenantId.HasValue)

@@ -6,6 +6,11 @@ namespace SCP.StorageFSC.Data.Models
     public sealed class Tenant : EntityBase
     {
         /// <summary>
+        /// Id owner user of the tenant. This is the user who created the tenant and has full control over it.
+        /// </summary>
+        public Guid UserId { get; set; }
+
+        /// <summary>
         /// External tenant GUID identifier passed through the API.
         /// </summary>
         public Guid ExternalTenantId { get; set; }

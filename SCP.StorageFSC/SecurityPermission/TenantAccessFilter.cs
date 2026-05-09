@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using scp.filestorage.Security;
 using SCP.StorageFSC.Data.Dto;
+using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Services;
 
@@ -23,10 +25,19 @@ namespace SCP.StorageFSC.SecurityPermission
             ActionExecutingContext context,
             ActionExecutionDelegate next)
         {
+            var user = context.HttpContext.User;
+            var authType = user!=null ? user.FindFirst("auth_type")?.Value : null;
+
+            if (authType == AuthType.WebApp)
+            {
+                await next();
+                return;
+            }
+
             try
             {
                 _authorizationService.DemandAuthenticated();
-
+ 
                 if (_options.RequiredPermission != TenantPermission.None)
                 {
                     _authorizationService.DemandPermission(_options.RequiredPermission);

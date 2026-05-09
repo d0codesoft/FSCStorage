@@ -44,17 +44,17 @@ namespace SCP.StorageFSC.Security
                 options.AddPolicy(ApiTokenOnlyPolicy, policy =>
                     policy.AddAuthenticationSchemes(ApiKeyScheme)
                           .RequireAuthenticatedUser()
-                          .RequireClaim("auth_type", "api_token"));
+                          .RequireClaim("auth_type", AuthType.ApiToken));
 
                 options.AddPolicy(WebUserOnlyPolicy, policy =>
                     policy.AddAuthenticationSchemes(CookieScheme)
                           .RequireAuthenticatedUser()
-                          .RequireClaim("auth_type", "web_user"));
+                          .RequireClaim("auth_type", AuthType.WebApp));
 
                 options.AddPolicy(AdminOnlyPolicy, policy =>
                     policy.AddAuthenticationSchemes(CookieScheme)
                           .RequireAuthenticatedUser()
-                          .RequireClaim("auth_type", "web_user")
+                          .RequireClaim("auth_type", AuthType.WebApp)
                           .RequireRole("Admin"));
 
                 options.AddPolicy("FilesRead", policy =>

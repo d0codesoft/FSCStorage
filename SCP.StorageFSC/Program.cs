@@ -73,10 +73,12 @@ builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 builder.Services.AddScoped<IPasswordHashService, PasswordHashService>();
 builder.Services.AddScoped<IAuthenticationHashService, AuthenticationHashService>();
 
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
 builder.Services.Configure<TotpOptions>(
     builder.Configuration.GetSection("Authentication:Totp"));
 
-builder.RegisterAuthenticationSecretProtection();
+builder.RegisterAuthenticationSecretProtection(applicationPaths);
 builder.Services.AddScoped<ITotpService, TotpService>();
 builder.Services.AddScoped<IOneTimeCodeSender, OneTimeCodeSender>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();

@@ -29,6 +29,11 @@ namespace scp.filestorage.Services.Auth
         /// User agent of the client.
         /// </summary>
         public string? UserAgent { get; init; }
+
+        /// <summary>
+        /// Remember the user on this device. When true, the authentication cookie will have a longer expiration time.
+        /// </summary>
+        public bool Remember { get; init; }
     }
 
     /// <summary>
@@ -39,6 +44,8 @@ namespace scp.filestorage.Services.Auth
         public AuthLoginStatus Status { get; init; }
 
         public Guid? UserId { get; init; }
+
+        public string UserName { get; init; } = string.Empty;
 
         public bool RequiresTwoFactor { get; init; }
 
@@ -91,6 +98,8 @@ namespace scp.filestorage.Services.Auth
         public TwoFactorVerifyStatus Status { get; init; }
 
         public Guid? UserId { get; init; }
+
+        public string UserName { get; init; } = string.Empty;
 
         public IReadOnlyList<string> Roles { get; init; } = Array.Empty<string>();
 

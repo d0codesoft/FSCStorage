@@ -1,0 +1,164 @@
+В проекте scp.filestorage авторизация веб-пользователей реализована через AuthController в namespace SCP.StorageFSC.Controllers с базовым маршрутом /auth.
+
+Контроллер использует сервис scp.filestorage.Services.Auth.IAuthenticationService. Контроллер остаётся тонким: валидирует обязательные поля, передаёт данные в AuthenticationService, создаёт cookie-principal и мапит статусы сервиса в HTTP-ответы.
+
+Основной механизм web-auth:
+- POST /auth/login
+- POST /auth/two-factor
+- POST /auth/recovery-code
+- POST /auth/logout
+- GET /auth/me
+
+Сессия веб-пользователя хранится в cookie-схеме FscCookie. После успешной авторизации контроллер вызывает HttpContext.SignInAsync с AuthenticationProperties:
+- IsPersistent = request.Remember
+- IssuedUtc = DateTimeOffset.UtcNow
+
+Principal создаётся через AuthController.CreatePrincipal(userId, userName, roles). В claims добавляются:
+- ClaimTypes.NameIdentifier = userId
+- ClaimTypes.Name = userName
+- auth_type = web_user
+- ClaimTypes.Role для каждой роли пользователя
+- если роль Administrator или Admin, дополнительно добавляются роль Admin и scope = admin
+
+Защищённые web endpoints используют policy WebUserOnly:
+- /auth/logout
+- /auth/me
+
+Policy WebUserOnly требует:
+- authentication scheme FscCookie
+- authenticated user
+- claim auth_type = web_user
+
+GET /auth/me возвращает MeResponse:
+- name
+- isAdmin
+- tenantId, если есть claim tenant_id
+- scopes из claims scope
+
+Процесс login:
+1. Клиент отправляет POST /auth/login с LoginRequest.
+2. Контроллер проверяет, что Login и Password не пустые.
+3. Контроллер вызывает AuthenticationService.LoginAsync и передаёт:
+   - Login
+   - Password
+   - TwoFactorCode
+   - IpAddress из HttpContext.Connection.RemoteIpAddress
+   - UserAgent из Request.Headers.UserAgent
+4. AuthenticationService ищет пользователя по normalized login:
+   - если login содержит @, поиск по normalized email
+   - иначе поиск по normalized user name
+5. Проверяется состояние пользователя:
+   - inactive -> UserInactive
+   - locked -> UserLocked
+6. Проверяется пароль через PasswordHashService.
+7. При неверном пароле увеличивается FailedLoginCount, LastFailedLoginUtc ставится в UTC; после 5 ошибок пользователь блокируется на 15 минут.
+8. При верном пароле счётчик ошибок сбрасывается.
+9. Если MustChangePassword = true, возвращается PasswordChangeRequired.
+10. Если PasswordExpiresUtc истёк, возвращается PasswordExpired.
+11. Если 2FA не требуется, возвращается Success, контроллер создаёт cookie и отвечает MeResponse.
+12. Если 2FA включена и TwoFactorRequiredForEveryLogin = true, запускается двухфакторный сценарий.
+
+Обработка ошибок /auth/login:
+- InvalidCredentials или UserNotFound -> 401 InvalidCredentials
+- UserInactive -> 403 UserInactive
+- UserLocked -> 403 UserLocked
+- PasswordExpired -> 403 PasswordExpired
+- PasswordChangeRequired -> 403 PasswordChangeRequired
+
+2FA процесс:
+1. 2FA включается на уровне пользователя через поля:
+   - TwoFactorEnabled
+   - TwoFactorRequiredForEveryLogin
+   - PreferredTwoFactorMethod
+   - TwoFactorEnabledUtc
+   - TwoFactorLastUsedUtc
+2. Поддерживаемые методы TwoFactorMethodType:
+   - AuthenticatorApp
+   - Email
+   - Sms
+3. При login сервис выбирает доступный 2FA-метод:
+   - default method
+   - preferred method
+   - первый usable method пользователя
+4. Метод считается usable, если:
+   - существует
+   - IsEnabled = true
+   - IsConfirmed = true
+   - LockedUntilUtc пустой или уже прошёл
+
+AuthenticatorApp:
+- Если пользователь отправил TwoFactorCode сразу в POST /auth/login, сервис может завершить 2FA в том же запросе.
+- TOTP секрет хранится зашифрованным через IAuthenticationSecretProtector.
+- Проверка кода идёт через ITotpService.VerifyCode.
+- При успешной проверке обновляются LastUsedUtc метода, TwoFactorLastUsedUtc пользователя, LastLoginUtc и LastLoginIpAddress.
+- При неверном TOTP увеличивается FailedAttemptCount метода; после 5 ошибок метод блокируется на 15 минут.
+
+Email/Sms:
+- При требовании 2FA сервис генерирует 6-значный numeric code.
+- Plain code не хранится, в БД сохраняется только hash через IAuthenticationHashService.
+- Создаётся UserTwoFactorChallenge со статусом Pending, Destination, ExpiresUtc, CreatedIpAddress, UserAgent.
+- Код отправляется через IOneTimeCodeSender.SendEmailCodeAsync или SendSmsCodeAsync.
+- Срок жизни кода: 5 минут.
+
+Login challenge:
+- Для любого 2FA-сценария создаётся UserLoginChallenge.
+- Клиенту возвращается plain ChallengeToken.
+- В БД хранится только ChallengeTokenHash.
+- UserLoginChallenge содержит:
+  - UserId
+  - ChallengeTokenHash
+  - MethodType
+  - TwoFactorChallengeId для Email/Sms
+  - Status = Pending
+  - ExpiresUtc
+  - FailedAttemptCount
+  - MaxFailedAttemptCount = 5
+  - IpAddress
+  - UserAgent
+- Срок жизни login challenge: 5 минут.
+
+Ответ /auth/login при необходимости 2FA:
+{
+  "requiresTwoFactor": true,
+  "twoFactorMethod": "AuthenticatorApp|Email|Sms",
+  "challengeToken": "...",
+  "challengeExpiresUtc": "..."
+}
+
+Завершение 2FA:
+- POST /auth/two-factor принимает:
+  - challengeToken
+  - code
+  - remember
+- Контроллер вызывает AuthenticationService.VerifyTwoFactorAsync.
+- Если проверка успешна, создаётся cookie-сессия FscCookie и возвращается MeResponse.
+- Если проверка неуспешна, возвращается ошибка.
+
+Recovery code:
+- POST /auth/recovery-code принимает тот же VerifyTwoFactorLoginRequest:
+  - challengeToken
+  - code
+  - remember
+- Контроллер вызывает AuthenticationService.VerifyRecoveryCodeAsync.
+- Recovery code проверяется по hash среди неиспользованных кодов пользователя.
+- При успешной проверке recovery code помечается использованным с UsedUtc, IpAddress и UserAgent.
+- Затем login challenge завершается, пользователь получает cookie-сессию.
+
+Ошибки /auth/two-factor и /auth/recovery-code:
+- InvalidChallenge -> 401 InvalidChallenge
+- ChallengeExpired -> 401 ChallengeExpired
+- ChallengeBlocked -> 403 ChallengeBlocked
+- InvalidCode -> 401 InvalidCode
+- MethodUnavailable -> 403 MethodUnavailable
+- UserInactive -> 403 UserInactive
+- UserLocked -> 403 UserLocked
+
+Logout:
+- POST /auth/logout требует WebUserOnly.
+- Выполняет SignOutAsync для FscCookie.
+- Возвращает 204 NoContent.
+
+Важно не смешивать web-user authorization и API-token authorization:
+- AuthController создаёт web-user cookie principal с auth_type = web_user.
+- API-token auth в проекте использует отдельную схему ApiKey и claims auth_type = api_token.
+- AdminOnly для web UI требует cookie FscCookie, auth_type = web_user и роль Admin.

@@ -83,7 +83,8 @@ namespace scp.filestorage.Services.Auth
                 return new LoginResult
                 {
                     Status = validationStatus,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -96,7 +97,8 @@ namespace scp.filestorage.Services.Auth
                 return new LoginResult
                 {
                     Status = AuthLoginStatus.InvalidCredentials,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -107,7 +109,8 @@ namespace scp.filestorage.Services.Auth
                 return new LoginResult
                 {
                     Status = AuthLoginStatus.PasswordChangeRequired,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -116,7 +119,8 @@ namespace scp.filestorage.Services.Auth
                 return new LoginResult
                 {
                     Status = AuthLoginStatus.PasswordExpired,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -129,7 +133,8 @@ namespace scp.filestorage.Services.Auth
                     return new LoginResult
                     {
                         Status = AuthLoginStatus.InvalidCredentials,
-                        UserId = user.Id
+                        UserId = user.Id,
+                        UserName = user.Name
                     };
                 }
 
@@ -156,6 +161,7 @@ namespace scp.filestorage.Services.Auth
                         {
                             Status = AuthLoginStatus.Success,
                             UserId = user.Id,
+                            UserName = user.Name,
                             Roles = authenticatedRoles
                         };
                     }
@@ -219,6 +225,7 @@ namespace scp.filestorage.Services.Auth
                 {
                     Status = AuthLoginStatus.TwoFactorRequired,
                     UserId = user.Id,
+                    UserName = user.Name,
                     RequiresTwoFactor = true,
                     TwoFactorMethod = twoFactorMethod.MethodType,
                     ChallengeToken = plainChallengeToken,
@@ -232,6 +239,7 @@ namespace scp.filestorage.Services.Auth
             {
                 Status = AuthLoginStatus.Success,
                 UserId = user.Id,
+                UserName = user.Name,
                 Roles = roles
             };
         }
@@ -309,7 +317,8 @@ namespace scp.filestorage.Services.Auth
                 return new VerifyTwoFactorResult
                 {
                     Status = userStatus,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -345,7 +354,8 @@ namespace scp.filestorage.Services.Auth
                 return new VerifyTwoFactorResult
                 {
                     Status = TwoFactorVerifyStatus.InvalidCode,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -368,6 +378,7 @@ namespace scp.filestorage.Services.Auth
             {
                 Status = TwoFactorVerifyStatus.Success,
                 UserId = user.Id,
+                UserName = user.Name,
                 Roles = roles
             };
         }
@@ -439,7 +450,8 @@ namespace scp.filestorage.Services.Auth
                 return new VerifyTwoFactorResult
                 {
                     Status = TwoFactorVerifyStatus.InvalidCode,
-                    UserId = user.Id
+                    UserId = user.Id,
+                    UserName = user.Name
                 };
             }
 
@@ -469,6 +481,7 @@ namespace scp.filestorage.Services.Auth
             {
                 Status = TwoFactorVerifyStatus.Success,
                 UserId = user.Id,
+                UserName = user.Name,
                 Roles = roles
             };
         }

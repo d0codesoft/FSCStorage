@@ -21,6 +21,7 @@ namespace SCP.StorageFSC.Data.Schema
             CREATE TABLE IF NOT EXISTS tenants
             (
                 id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                user_id            BLOB NOT NULL CHECK(length(user_id) = 16),
                 external_tenant_id BLOB NOT NULL CHECK(length(external_tenant_id) = 16),
                 name               TEXT    NOT NULL,
                 is_active          INTEGER NOT NULL DEFAULT 1,
@@ -35,6 +36,7 @@ namespace SCP.StorageFSC.Data.Schema
             CREATE TABLE IF NOT EXISTS api_tokens
             (
                 id            BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                user_id       BLOB NOT NULL CHECK(length(user_id) = 16),
                 tenant_id     BLOB NULL CHECK(tenant_id IS NULL OR length(tenant_id)=16),
                 name          TEXT    NOT NULL,
                 token_hash    TEXT    NOT NULL,
@@ -206,7 +208,13 @@ namespace SCP.StorageFSC.Data.Schema
 
             CREATE INDEX IF NOT EXISTS ix_api_tokens_tenant_id
                 ON api_tokens(tenant_id);
-
+            
+            CREATE INDEX IF NOT EXISTS ix_tenants_user_id
+                ON tenants(user_id);
+            
+            CREATE INDEX IF NOT EXISTS ix_api_tokens_user_id
+                ON api_tokens(user_id);
+           
             CREATE INDEX IF NOT EXISTS ix_api_tokens_token_prefix
                 ON api_tokens(token_prefix);
 

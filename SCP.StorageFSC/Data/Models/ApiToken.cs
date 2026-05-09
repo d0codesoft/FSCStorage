@@ -6,6 +6,11 @@ namespace SCP.StorageFSC.Data.Models
     public sealed class ApiToken : EntityBase
     {
         /// <summary>
+        /// Gets or sets the unique identifier for the user.
+        /// </summary>
+        public Guid UserId { get; set; }
+
+        /// <summary>
         /// Tenant identifier.
         /// </summary>
         public Guid? TenantId { get; set; }

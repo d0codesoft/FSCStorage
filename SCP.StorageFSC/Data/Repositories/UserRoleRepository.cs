@@ -74,6 +74,7 @@ namespace scp.filestorage.Data.Repositories
         public async Task<UserRole?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             const string sql = UserRoleSelectSql + """
+
                 WHERE id = @Id
                 LIMIT 1;
                 """;
@@ -107,6 +108,7 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = UserRoleSelectSql + """
+
                 WHERE user_id = @UserId
                   AND role_id = @RoleId
                 LIMIT 1;
@@ -148,6 +150,7 @@ namespace scp.filestorage.Data.Repositories
             CancellationToken cancellationToken = default)
         {
             const string sql = UserRoleSelectSql + """
+
                 WHERE user_id = @UserId
                 ORDER BY created_utc;
                 """;

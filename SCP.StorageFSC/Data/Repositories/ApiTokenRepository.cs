@@ -23,6 +23,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 INSERT INTO api_tokens
                 (
                     id,
+                    user_id,
                     tenant_id,
                     name,
                     token_hash,
@@ -42,6 +43,7 @@ namespace SCP.StorageFSC.Data.Repositories
                 VALUES
                 (
                     @Id,
+                    @UserId,
                     @TenantId,
                     @Name,
                     @TokenHash,
@@ -69,6 +71,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     new
                     {
                         token.Id,
+                        token.UserId,
                         token.TenantId,
                         token.Name,
                         token.TokenHash,
@@ -111,7 +114,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
-                    public_id AS PublicId,
+                    user_id AS UserId,
                     tenant_id AS TenantId,
                     name AS Name,
                     token_hash AS TokenHash,
@@ -159,6 +162,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     tenant_id AS TenantId,
                     name AS Name,
                     token_hash AS TokenHash,
@@ -201,11 +205,61 @@ namespace SCP.StorageFSC.Data.Repositories
             }
         }
 
+        public async Task<ApiToken?> GetFirstByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    user_id AS UserId,
+                    tenant_id AS TenantId,
+                    name AS Name,
+                    token_hash AS TokenHash,
+                    token_prefix AS TokenPrefix,
+                    is_active AS IsActive,
+                    is_admin AS IsAdmin,
+                    can_read AS CanRead,
+                    can_write AS CanWrite,
+                    can_delete AS CanDelete,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion,
+                    last_used_utc AS LastUsedUtc,
+                    expires_utc AS ExpiresUtc,
+                    revoked_utc AS RevokedUtc
+                FROM api_tokens
+                WHERE user_id = @UserId
+                ORDER BY created_utc, id
+                LIMIT 1;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<ApiToken>(new CommandDefinition(
+                    sql,
+                    new { UserId = userId },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load first API token for user '{userId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load first API token for user '{userId}' due to database error.", ex);
+            }
+        }
+
         public async Task<ApiToken?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
         {
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     tenant_id AS TenantId,
                     name AS Name,
                     token_hash AS TokenHash,
@@ -253,6 +307,7 @@ namespace SCP.StorageFSC.Data.Repositories
             const string sql = """
                 SELECT
                     id AS Id,
+                    user_id AS UserId,
                     tenant_id AS TenantId,
                     name AS Name,
                     token_hash AS TokenHash,
