@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:fsc.mob.client.ViewModels"
+             xmlns:api="clr-namespace:fsc.mob.client.Api"
+             x:Class="fsc.mob.client.Pages.TenantDetailsPage"
+             x:DataType="viewModels:TenantDetailsViewModel"
+             Title="{Binding PageTitle}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="12">
+            <Label Text="{Binding PageTitle}" FontSize="22" FontAttributes="Bold" />
+            <Label Text="{Binding CreatedUtc, StringFormat='Created: {0}'}" IsVisible="{Binding IsExistingTenant}" />
+
+            <Label Text="Tenant name" />
+            <Entry Text="{Binding Name}" />
+
+            <Label Text="Owner user" />
+            <Picker ItemsSource="{Binding AvailableUsers}"
+                    SelectedItem="{Binding SelectedOwner}"
+                    ItemDisplayBinding="{Binding Label}" />
+
+            <HorizontalStackLayout Spacing="10">
+                <CheckBox IsChecked="{Binding IsActive}" VerticalOptions="Center" />
+                <Label Text="Active" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Save tenant" Command="{Binding SaveTenantCommand}" />
+                <Button Text="Delete tenant" Command="{Binding DeleteTenantCommand}" IsVisible="{Binding IsExistingTenant}" />
+            </HorizontalStackLayout>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding StatusMessage}" TextColor="Green" />
+            <Label Text="{Binding ErrorMessage}" TextColor="Crimson" />
+
+            <Frame Padding="14" BackgroundColor="#FFF7E6" IsVisible="{Binding HasGeneratedToken}">
+                <VerticalStackLayout Spacing="6">
+                    <Label Text="Copy this generated API token now. It will not be shown again."
+                           FontAttributes="Bold" />
+                    <Label Text="{Binding GeneratedToken.Token}" LineBreakMode="CharacterWrap" />
+                    <Button Text="Dismiss" Command="{Binding ClearGeneratedTokenCommand}" />
+                </VerticalStackLayout>
+            </Frame>
+
+            <Label Text="API key editor" FontSize="18" FontAttributes="Bold" IsVisible="{Binding IsExistingTenant}" />
+            <VerticalStackLayout Spacing="8" IsVisible="{Binding IsExistingTenant}">
+                <Label Text="Token name" />
+                <Entry Text="{Binding TokenName}" Placeholder="Tenant admin key" />
+
+                <Label Text="User" />
+                <Picker ItemsSource="{Binding AvailableUsers}"
+                        SelectedItem="{Binding SelectedTokenUser}"
+                        ItemDisplayBinding="{Binding Label}" />
+
+                <Label Text="Expires UTC" />
+                <Entry Text="{Binding TokenExpiresUtcText}" Placeholder="2026-05-10 18:30:00" />
+
+                <HorizontalStackLayout Spacing="12">
+                    <HorizontalStackLayout Spacing="6">
+                        <CheckBox IsChecked="{Binding TokenCanRead}" VerticalOptions="Center" />
+                        <Label Text="Read" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="6">
+                        <CheckBox IsChecked="{Binding TokenCanWrite}" VerticalOptions="Center" />
+                        <Label Text="Write" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Spacing="12">
+                    <HorizontalStackLayout Spacing="6">
+                        <CheckBox IsChecked="{Binding TokenCanDelete}" VerticalOptions="Center" />
+                        <Label Text="Delete" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                    <HorizontalStackLayout Spacing="6">
+                        <CheckBox IsChecked="{Binding TokenIsAdmin}" VerticalOptions="Center" />
+                        <Label Text="Admin" VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Spacing="6" IsVisible="{Binding IsEditingToken}">
+                    <CheckBox IsChecked="{Binding TokenIsActive}" VerticalOptions="Center" />
+                    <Label Text="Key is active" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+
+                <HorizontalStackLayout Spacing="10">
+                    <Button Text="New key" Command="{Binding StartCreateTokenCommand}" />
+                    <Button Text="Save key" Command="{Binding SaveTokenCommand}" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <Label Text="Tenant API keys" FontSize="18" FontAttributes="Bold" IsVisible="{Binding IsExistingTenant}" />
+            <CollectionView ItemsSource="{Binding ApiTokens}" SelectionMode="None" IsVisible="{Binding IsExistingTenant}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="api:ApiTokenViewModel">
+                        <Frame Padding="12" Margin="0,0,0,8">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                <Label Text="{Binding TokenPrefix}" />
+                                <Label Text="{Binding ScopesLabel}" />
+                                <Label Text="{Binding StatusLabel}" />
+                                <HorizontalStackLayout Spacing="10">
+                                    <Button Text="Edit"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:TenantDetailsViewModel}}, Path=EditTokenCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    <Button Text="Delete"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:TenantDetailsViewModel}}, Path=DeleteTokenCommand}"
+                                            CommandParameter="{Binding .}" />
+                                </HorizontalStackLayout>
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:fsc.mob.client.ViewModels"
+             x:Class="fsc.mob.client.Pages.ConnectionPage"
+             x:DataType="viewModels:ConnectionViewModel"
+             Title="Connection">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+            <Label Text="FSC Storage Admin"
+                   FontSize="24"
+                   FontAttributes="Bold" />
+
+            <Label Text="Use an API token for a persistent admin profile, or use admin credentials for a session-only sign-in." />
+
+            <Label Text="Server URL" />
+            <Entry Text="{Binding ServerUrl}"
+                   Keyboard="Url"
+                   Placeholder="http://10.0.2.2:5770" />
+
+            <Label Text="Sign-in method" />
+            <Picker ItemsSource="{Binding AuthModes}"
+                    SelectedItem="{Binding SelectedAuthMode}"
+                    ItemDisplayBinding="{Binding Label}" />
+
+            <VerticalStackLayout IsVisible="{Binding IsApiTokenMode}" Spacing="10">
+                <Label Text="API token" />
+                <Entry Text="{Binding ApiToken}"
+                       IsPassword="True"
+                       Placeholder="Enter admin API token" />
+                <HorizontalStackLayout Spacing="10">
+                    <CheckBox IsChecked="{Binding RememberApiToken}" VerticalOptions="Center" />
+                    <Label Text="Save token in secure storage" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+                <Button Text="Clear saved token"
+                        Command="{Binding ClearSavedTokenCommand}" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout IsVisible="{Binding IsCredentialMode}" Spacing="10">
+                <Label Text="Login" />
+                <Entry Text="{Binding Login}" Placeholder="Admin user name" />
+                <Label Text="Password" />
+                <Entry Text="{Binding Password}"
+                       IsPassword="True"
+                       Placeholder="Password" />
+                <VerticalStackLayout IsVisible="{Binding IsAwaitingTwoFactor}" Spacing="8">
+                    <Label Text="{Binding TwoFactorHint}" />
+                    <Label Text="Verification code" />
+                    <Entry Text="{Binding TwoFactorCode}"
+                           Placeholder="6-digit or recovery code" />
+                </VerticalStackLayout>
+                <HorizontalStackLayout Spacing="10">
+                    <CheckBox IsChecked="{Binding RememberServerUrl}" VerticalOptions="Center" />
+                    <Label Text="Remember server URL" VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </VerticalStackLayout>
+
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Test connection" Command="{Binding TestConnectionCommand}" />
+                <Button Text="Sign in" Command="{Binding SignInCommand}" />
+            </HorizontalStackLayout>
+
+            <Button Text="Disconnect" Command="{Binding DisconnectCommand}" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding StatusMessage}" TextColor="Green" />
+            <Label Text="{Binding ErrorMessage}" TextColor="Crimson" />
+
+            <Label Text="For Android emulator testing, use http://10.0.2.2:5770 to reach the host machine."
+                   FontSize="12" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

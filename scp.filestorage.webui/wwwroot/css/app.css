@@ -1,116 +1,25 @@
 /* =========================
-   Light theme
-   ========================= */
-:root {
-    /* Brand */
-    --rz-primary: #3756b5;
-    --rz-primary-dark: #2c4694;
-    --rz-primary-light: #5d78c8;
-    --rz-primary-lighter: #dbe3f7;
-    --rz-secondary: #fdcc51;
-    /* Base */
-    --rz-body-background-color: #f7f5f4;
-    --rz-text-color: #2a2f3a;
-    --rz-text-title-color: #1d2433;
-    /* Optional useful Radzen-style extras */
-    --rz-base-background-color: #ffffff;
-    --rz-panel-background-color: #ffffff;
-    --rz-card-background-color: #ffffff;
-    --rz-sidebar-background-color: #eef2fb;
-    --rz-header-background-color: #ffffff;
-    --rz-footer-background-color: #ffffff;
-    --rz-border-color: #d9dce5;
-    --rz-input-background-color: #ffffff;
-    --rz-input-border-color: #c9cfdd;
-    --rz-text-secondary-color: #667085;
-    --rz-content-background-color: #ffffff;
-    --rz-grid-header-background-color: #eef2fb;
-    --rz-grid-even-row-background-color: #fafbfe;
-    --rz-grid-hover-background-color: #f2f5fc;
-    --rz-button-hover-background-color: #2c4694;
-    --rz-button-hover-color: #ffffff;
-    --rz-link-color: #3756b5;
-    --rz-link-hover-color: #2c4694;
-    --rz-focus-color: rgba(55, 86, 181, 0.35);
-    --rz-shadow-color: rgba(20, 27, 45, 0.12);
-}
-
-/* =========================
-   Dark theme
-   Add class="dark-theme" to body or a root container
-   ========================= */
-.dark-theme {
-    /* Brand */
-    --rz-primary: #6f89d6;
-    --rz-primary-dark: #5875cc;
-    --rz-primary-light: #8fa3e0;
-    --rz-primary-lighter: #2d3860;
-    --rz-secondary: #fdcc51;
-    /* Base */
-    --rz-body-background-color: #161a22;
-    --rz-text-color: #e8e1e0;
-    --rz-text-title-color: #ffffff;
-    /* Optional useful Radzen-style extras */
-    --rz-base-background-color: #1d2330;
-    --rz-panel-background-color: #202737;
-    --rz-card-background-color: #202737;
-    --rz-sidebar-background-color: #171d29;
-    --rz-header-background-color: #1b2130;
-    --rz-footer-background-color: #1b2130;
-    --rz-border-color: #313a4f;
-    --rz-input-background-color: #151b27;
-    --rz-input-border-color: #3b4761;
-    --rz-text-secondary-color: #b7becd;
-    --rz-content-background-color: #1d2330;
-    --rz-grid-header-background-color: #25304a;
-    --rz-grid-even-row-background-color: #1a2130;
-    --rz-grid-hover-background-color: #27324d;
-    --rz-button-hover-background-color: #5875cc;
-    --rz-button-hover-color: #ffffff;
-    --rz-link-color: #8fa3e0;
-    --rz-link-hover-color: #bfd0ff;
-    --rz-focus-color: rgba(111, 137, 214, 0.4);
-    --rz-shadow-color: rgba(0, 0, 0, 0.35);
-}
-
-/* =========================
-   App palette alignment
-   Uses only base colors:
-   #3756b5 #fdcc51 #e8e1e0
+   App shell styles
+   Color values come from theme-overrides.css through Radzen variables.
    ========================= */
 
 :root {
-    --app-primary: #3756b5;
-    --app-primary-dark: #2c4694;
-    --app-primary-light: #5d78c8;
-    --app-accent: #fdcc51;
-    --app-accent-dark: #e3b63f;
-    --app-neutral: #e8e1e0;
-    --app-neutral-dark: #d7cfce;
-    --app-surface: #ffffff;
-    --app-surface-soft: #f7f5f4;
-    --app-text: #2a2f3a;
-    --app-text-muted: #6d7280;
-    --app-title: #1d2433;
-    --app-sidebar-text: #e8e1e0;
-    --app-sidebar-muted: #d7cfce;
-}
-
-.dark-theme {
-    --app-primary: #6f89d6;
-    --app-primary-dark: #5875cc;
-    --app-primary-light: #8fa3e0;
-    --app-accent: #fdcc51;
-    --app-accent-dark: #e3b63f;
-    --app-neutral: #e8e1e0;
-    --app-neutral-dark: #bfb7b6;
-    --app-surface: #1d2330;
-    --app-surface-soft: #161a22;
-    --app-text: #e8e1e0;
-    --app-text-muted: #d7cfce;
-    --app-title: #ffffff;
-    --app-sidebar-text: #e8e1e0;
-    --app-sidebar-muted: #d7cfce;
+    --app-primary: var(--rz-primary);
+    --app-primary-dark: var(--rz-primary-dark);
+    --app-primary-light: var(--rz-primary-light);
+    --app-accent: var(--rz-secondary);
+    --app-accent-dark: var(--rz-secondary-dark);
+    --app-neutral: var(--rz-base-200);
+    --app-neutral-dark: var(--rz-base-300);
+    --app-surface: var(--rz-base-background-color);
+    --app-surface-soft: var(--rz-base-50);
+    --app-text: var(--rz-text-color);
+    --app-text-muted: var(--rz-text-tertiary-color);
+    --app-title: var(--rz-text-title-color);
+    --app-sidebar-text: var(--rz-sidebar-color);
+    --app-sidebar-muted: var(--rz-text-tertiary-color);
+    --app-border: var(--rz-border-normal);
+    --app-radius: var(--rz-border-radius-2);
 }
 
 html,
@@ -131,30 +40,26 @@ code {
     color: var(--app-primary-dark);
 }
 
-.dark-theme code {
-    color: var(--app-accent);
-}
-
 #blazor-error-ui {
     background: color-mix(in srgb, var(--app-accent) 28%, var(--app-surface) 72%);
     color: var(--app-title);
-    box-shadow: 0 -1px 2px var(--rz-shadow-color);
+    box-shadow: var(--rz-shadow-2);
 }
 
 .blazor-error-boundary {
     background: var(--app-primary-dark);
-    color: #ffffff;
+    color: var(--rz-on-primary-dark);
 }
 
 .loading-progress circle {
-    stroke: color-mix(in srgb, var(--app-neutral) 78%, white 22%);
+    stroke: color-mix(in srgb, var(--app-neutral) 78%, var(--app-surface) 22%);
 }
 
     .loading-progress circle:last-child {
         stroke: var(--app-primary);
     }
 
-.loading-progress-text,
+/*.loading-progress-text,
 .page-heading h1,
 .chart-panel h2,
 .data-section h2,
@@ -171,7 +76,7 @@ code {
 .login-panel p,
 .login-name {
     color: var(--app-text-muted);
-}
+}*/
 
 .metric-card,
 .chart-panel,
@@ -180,18 +85,18 @@ code {
 .task-output,
 .empty-panel,
 .login-panel {
-    border-color: var(--rz-border-color);
+    border-color: var(--rz-base-300);
     background: var(--app-surface);
 }
 
-    .metric-card strong,
+    /*.metric-card strong,
     .primary-cell,
     .sidebar-foot__label {
         color: var(--app-title);
-    }
+    }*/
 
 .metric-icon {
-    color: #ffffff;
+    color: var(--rz-on-primary);
 }
 
 .metric-card--blue .metric-icon,
@@ -203,7 +108,7 @@ code {
 
 .metric-card--amber .metric-icon {
     background: var(--app-accent-dark);
-    color: #2a2f3a;
+    color: var(--rz-on-secondary-dark);
 }
 
 .task-output {
@@ -226,7 +131,7 @@ code {
     .app-menu .rz-navigation-item-link:hover,
     .app-menu .rz-navigation-item-active > .rz-navigation-item-link {
         background: color-mix(in srgb, var(--app-primary) 26%, transparent 74%);
-        color: #ffffff;
+        color: var(--rz-on-primary);
     }
 
 .sidebar-foot {
@@ -240,9 +145,8 @@ h1:focus {
 }
 
 #blazor-error-ui {
-    color-scheme: light only;
     bottom: 0;
-    box-shadow: 0 -1px 2px rgba(15, 23, 42, 0.18);
+    box-shadow: var(--rz-shadow-2);
     box-sizing: border-box;
     display: none;
     left: 0;
@@ -260,8 +164,8 @@ h1:focus {
 }
 
 .blazor-error-boundary {
-    background: #991b1b;
-    border-radius: 8px;
+    background: var(--rz-danger);
+    border-radius: var(--app-radius);
     padding: 1rem;
 }
 
@@ -280,14 +184,14 @@ h1:focus {
 
 .loading-progress circle {
     fill: none;
-    stroke: #dbe3ef;
+    stroke: var(--rz-base-200);
     stroke-width: 0.6rem;
     transform-origin: 50% 50%;
     transform: rotate(-90deg);
 }
 
 .loading-progress circle:last-child {
-    stroke: #1d4ed8;
+    stroke: var(--app-primary);
     stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
     transition: stroke-dasharray 0.05s ease-in-out;
 }
@@ -340,7 +244,7 @@ h1:focus {
     position: relative;
     min-height: 9rem;
     overflow: hidden;
-    border: 1px solid #e5e8ef;
+    border: var(--app-border);
 }
 
 .metric-card span {
@@ -362,23 +266,23 @@ h1:focus {
     width: 2.25rem;
     height: 2.25rem;
     margin-bottom: 0.85rem;
-    border-radius: 8px;
+    border-radius: var(--app-radius);
 }
 
 .metric-card--blue .metric-icon {
-    background: #1d4ed8;
+    background: var(--app-primary);
 }
 
 .metric-card--green .metric-icon {
-    background: #059669;
+    background: var(--rz-success);
 }
 
 .metric-card--amber .metric-icon {
-    background: #d97706;
+    background: var(--rz-warning-dark);
 }
 
 .metric-card--slate .metric-icon {
-    background: #475569;
+    background: var(--rz-secondary-dark);
 }
 
 .chart-grid {
@@ -390,7 +294,7 @@ h1:focus {
 
 .chart-panel {
     min-height: 22rem;
-    border: 1px solid #e5e8ef;
+    border: var(--app-border);
 }
 
 .chart-panel h2,
@@ -406,10 +310,10 @@ h1:focus {
 }
 
 .app-grid {
-    border: 1px solid #e5e8ef;
-    border-radius: 8px;
+    border: var(--app-border);
+    border-radius: var(--app-radius);
     overflow: hidden;
-    background: #fff;
+    background: var(--app-surface);
 }
 
 .primary-cell {
@@ -418,14 +322,14 @@ h1:focus {
 }
 
 .secondary-cell {
-    color: #64748b;
+    color: var(--app-text-muted);
     font-size: 0.78rem;
     overflow-wrap: anywhere;
 }
 
 .details-panel {
     margin-top: 1rem;
-    border: 1px solid #e5e8ef;
+    border: var(--app-border);
 }
 
 .admin-form-grid {
@@ -456,8 +360,8 @@ h1:focus {
 .token-once {
     margin-top: 0.5rem;
     padding: 0.75rem;
-    border: 1px dashed var(--rz-border-color);
-    border-radius: 8px;
+    border: var(--rz-border-width) dashed var(--rz-base-400);
+    border-radius: var(--app-radius);
     background: var(--app-surface);
     font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
     overflow-wrap: anywhere;
@@ -493,7 +397,7 @@ h1:focus {
 }
 
 .details-grid dt {
-    color: #64748b;
+    color: var(--app-text-muted);
     font-weight: 700;
 }
 
@@ -505,9 +409,9 @@ h1:focus {
 .task-output {
     max-height: 18rem;
     overflow: auto;
-    background: #f8fafc;
-    border: 1px solid #e5e8ef;
-    border-radius: 8px;
+    background: var(--app-surface-soft);
+    border: var(--app-border);
+    border-radius: var(--app-radius);
     padding: 0.75rem;
     white-space: pre-wrap;
 }
@@ -517,14 +421,14 @@ h1:focus {
     align-items: center;
     gap: 0.5rem;
     min-height: 4rem;
-    border: 1px solid #e5e8ef;
-    color: #64748b;
+    border: var(--app-border);
+    color: var(--app-text-muted);
 }
 
 .login-panel {
     width: min(100%, 460px);
     margin: 4rem auto 0;
-    border: 1px solid #e5e8ef;
+    border: var(--app-border);
 }
 
 .login-panel h1 {
@@ -535,7 +439,7 @@ h1:focus {
 
 .login-panel p {
     margin: 0 0 1rem;
-    color: #64748b;
+    color: var(--app-text-muted);
 }
 
 .login-field {
@@ -550,7 +454,7 @@ h1:focus {
 .login-name {
     max-width: 18rem;
     overflow: hidden;
-    color: #334155;
+    color: var(--app-text-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -560,14 +464,14 @@ h1:focus {
 }
 
 .sidebar-brand__title {
-    color: #f8fafc;
+    color: var(--app-sidebar-text);
     font-size: 1rem;
     font-weight: 800;
 }
 
 .sidebar-brand__text,
 .sidebar-foot__text {
-    color: #94a3b8;
+    color: var(--app-sidebar-muted);
     font-size: 0.78rem;
 }
 
@@ -576,25 +480,25 @@ h1:focus {
 }
 
 .app-menu .rz-navigation-item-link {
-    color: #cbd5e1;
+    color: var(--app-sidebar-text);
 }
 
 .app-menu .rz-navigation-item-link:hover,
 .app-menu .rz-navigation-item-active > .rz-navigation-item-link {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
+    background: color-mix(in srgb, var(--app-primary) 26%, transparent 74%);
+    color: var(--rz-on-primary);
 }
 
 .sidebar-foot {
     margin: 1rem;
     padding: 0.85rem;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
+    border: var(--rz-border-width) solid color-mix(in srgb, var(--app-sidebar-text) 18%, transparent 82%);
+    border-radius: var(--app-radius);
+    background: color-mix(in srgb, var(--app-sidebar-text) 8%, transparent 92%);
 }
 
 .sidebar-foot__label {
-    color: #e2e8f0;
+    color: var(--app-sidebar-text);
     font-size: 0.83rem;
     font-weight: 700;
 }

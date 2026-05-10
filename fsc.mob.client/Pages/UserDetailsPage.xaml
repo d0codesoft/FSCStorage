@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:fsc.mob.client.ViewModels"
+             xmlns:api="clr-namespace:fsc.mob.client.Api"
+             x:Class="fsc.mob.client.Pages.UserDetailsPage"
+             x:DataType="viewModels:UserDetailsViewModel"
+             Title="{Binding PageTitle}">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="12">
+            <Label Text="{Binding PageTitle}" FontSize="22" FontAttributes="Bold" />
+            <Label Text="{Binding CreatedUtc, StringFormat='Created: {0}'}" IsVisible="{Binding IsExistingUser}" />
+
+            <Label Text="User name" />
+            <Entry Text="{Binding Name}" />
+
+            <Label Text="Email" />
+            <Entry Text="{Binding Email}" Keyboard="Email" />
+
+            <Label Text="Password" />
+            <Entry Text="{Binding Password}" IsPassword="True" Placeholder="Leave blank to keep existing password" />
+
+            <HorizontalStackLayout Spacing="10">
+                <CheckBox IsChecked="{Binding IsActive}" VerticalOptions="Center" />
+                <Label Text="Active" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="10">
+                <CheckBox IsChecked="{Binding IsAdmin}" VerticalOptions="Center" />
+                <Label Text="Administrator" VerticalOptions="Center" />
+            </HorizontalStackLayout>
+
+            <HorizontalStackLayout Spacing="10">
+                <Button Text="Save" Command="{Binding SaveCommand}" />
+                <Button Text="Delete" Command="{Binding DeleteCommand}" IsVisible="{Binding IsExistingUser}" />
+            </HorizontalStackLayout>
+
+            <Button Text="{Binding BlockActionLabel}" Command="{Binding ToggleBlockCommand}" IsVisible="{Binding IsExistingUser}" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding StatusMessage}" TextColor="Green" />
+            <Label Text="{Binding ErrorMessage}" TextColor="Crimson" />
+
+            <Label Text="User tenants" FontSize="18" FontAttributes="Bold" IsVisible="{Binding IsExistingUser}" />
+            <Button Text="Add tenant" Command="{Binding AddTenantCommand}" IsVisible="{Binding IsExistingUser}" />
+            <CollectionView ItemsSource="{Binding Tenants}" SelectionMode="None" IsVisible="{Binding IsExistingUser}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="api:TenantViewModel">
+                        <Frame Padding="12" Margin="0,0,0,8">
+                            <VerticalStackLayout Spacing="4">
+                                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                <Label Text="{Binding StatusLabel}" />
+                                <Label Text="{Binding CreatedUtcDisplay}" />
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <Label Text="API keys by tenant" FontSize="18" FontAttributes="Bold" IsVisible="{Binding IsExistingUser}" />
+            <VerticalStackLayout BindableLayout.ItemsSource="{Binding TokenGroups}">
+                <BindableLayout.ItemTemplate>
+                    <DataTemplate x:DataType="api:UserTokenGroup">
+                        <Frame Padding="12" Margin="0,0,0,8">
+                            <VerticalStackLayout Spacing="6">
+                                <Label Text="{Binding TenantName}" FontAttributes="Bold" />
+                                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Tokens}">
+                                    <BindableLayout.ItemTemplate>
+                                        <DataTemplate x:DataType="api:UserApiTokenViewModel">
+                                            <VerticalStackLayout Spacing="2">
+                                                <Label Text="{Binding Name}" />
+                                                <Label Text="{Binding ScopesLabel}" FontSize="12" />
+                                                <Label Text="{Binding StatusLabel}" FontSize="12" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </BindableLayout.ItemTemplate>
+                                </VerticalStackLayout>
+                            </VerticalStackLayout>
+                        </Frame>
+                    </DataTemplate>
+                </BindableLayout.ItemTemplate>
+            </VerticalStackLayout>
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="fsc.mob.client/fsc.mob.client.csproj" Id="b5a42fae-65dc-4bc5-b00a-3b9c3dd33910" />
   <Project Path="fsc_adm_cli/fsc_adm_cli.csproj" />
   <Project Path="installer/FSCStorage.Installer.wixproj" Type="b7dd6f7e-def8-4e67-b5b7-07ef123db6f0">
     <Platform Project="x64" />

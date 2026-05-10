@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewModels="clr-namespace:fsc.mob.client.ViewModels"
+             xmlns:api="clr-namespace:fsc.mob.client.Api"
+             x:Class="fsc.mob.client.Pages.UsersPage"
+             x:DataType="viewModels:UsersViewModel"
+             Title="Users">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="20">
+        <HorizontalStackLayout Grid.Row="0" Spacing="10">
+            <Button Text="Refresh" Command="{Binding RefreshCommand}" />
+            <Button Text="Create user" Command="{Binding CreateUserCommand}" />
+        </HorizontalStackLayout>
+
+        <VerticalStackLayout Grid.Row="1" Spacing="4" Margin="0,10,0,10">
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding StatusMessage}" TextColor="Green" />
+            <Label Text="{Binding ErrorMessage}" TextColor="Crimson" />
+        </VerticalStackLayout>
+
+        <CollectionView Grid.Row="2" ItemsSource="{Binding Users}" SelectionMode="None">
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="api:UserManagementViewModel">
+                    <Frame Padding="12" Margin="0,0,0,10">
+                        <VerticalStackLayout Spacing="6">
+                            <Label Text="{Binding UserName}" FontAttributes="Bold" />
+                            <Label Text="{Binding Email}" />
+                            <Label Text="{Binding RoleLabel}" />
+                            <Label Text="{Binding StatusLabel}" />
+                            <Label Text="{Binding TenantCount, StringFormat='Tenants: {0}'}" />
+                            <Label Text="{Binding ApiTokenCount, StringFormat='API keys: {0}'}" />
+                            <Button Text="Open"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:UsersViewModel}}, Path=OpenUserCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </VerticalStackLayout>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>

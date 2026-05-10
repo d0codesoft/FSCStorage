@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="fsc.mob.client.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:pages="clr-namespace:fsc.mob.client.Pages"
+    Title="FSC Storage Admin">
+
+    <FlyoutItem Title="Connection" Route="connection" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            Title="Connection"
+            ContentTemplate="{DataTemplate pages:ConnectionPage}"
+            Route="connection" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Dashboard" Route="dashboard" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            Title="Dashboard"
+            ContentTemplate="{DataTemplate pages:DashboardPage}"
+            Route="dashboard" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Users" Route="users" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            Title="Users"
+            ContentTemplate="{DataTemplate pages:UsersPage}"
+            Route="users" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Tenants" Route="tenants" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            Title="Tenants"
+            ContentTemplate="{DataTemplate pages:TenantsPage}"
+            Route="tenants" />
+    </FlyoutItem>
+
+    <FlyoutItem Title="Maintenance" Route="maintenance" FlyoutDisplayOptions="AsSingleItem">
+        <ShellContent
+            Title="Maintenance"
+            ContentTemplate="{DataTemplate pages:MaintenancePage}"
+            Route="maintenance" />
+    </FlyoutItem>
+
+</Shell>

@@ -8,7 +8,7 @@ using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
 using SCP.StorageFSC.SecurityPermission;
 
-namespace SCP.StorageFSC.Controllers
+namespace scp.filestorage.Controllers
 {
     [ApiController]
     [Route("ui-api")]
