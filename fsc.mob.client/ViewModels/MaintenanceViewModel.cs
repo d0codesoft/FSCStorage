@@ -17,10 +17,10 @@ public sealed partial class MaintenanceViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private IReadOnlyList<BackgroundTaskViewModel> _activeTasks = [];
+    public partial IReadOnlyList<BackgroundTaskViewModel> ActiveTasks { get; set; } = [];
 
     [ObservableProperty]
-    private IReadOnlyList<BackgroundTaskViewModel> _completedTasks = [];
+    public partial IReadOnlyList<BackgroundTaskViewModel> CompletedTasks { get; set; } = [];
 
     public async Task LoadAsync()
     {

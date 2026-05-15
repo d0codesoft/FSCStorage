@@ -46,13 +46,13 @@
             <CollectionView ItemsSource="{Binding Tenants}" SelectionMode="None" IsVisible="{Binding IsExistingUser}">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="api:TenantViewModel">
-                        <Frame Padding="12" Margin="0,0,0,8">
+                        <Border Padding="12" Margin="0,0,0,8">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Name}" FontAttributes="Bold" />
                                 <Label Text="{Binding StatusLabel}" />
                                 <Label Text="{Binding CreatedUtcDisplay}" />
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
@@ -61,7 +61,7 @@
             <VerticalStackLayout BindableLayout.ItemsSource="{Binding TokenGroups}">
                 <BindableLayout.ItemTemplate>
                     <DataTemplate x:DataType="api:UserTokenGroup">
-                        <Frame Padding="12" Margin="0,0,0,8">
+                        <Border Padding="12" Margin="0,0,0,8">
                             <VerticalStackLayout Spacing="6">
                                 <Label Text="{Binding TenantName}" FontAttributes="Bold" />
                                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding Tokens}">
@@ -76,7 +76,7 @@
                                     </BindableLayout.ItemTemplate>
                                 </VerticalStackLayout>
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </BindableLayout.ItemTemplate>
             </VerticalStackLayout>

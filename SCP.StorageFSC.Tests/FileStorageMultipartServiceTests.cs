@@ -27,6 +27,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     [Fact]
     public async Task InitAsync_CreatesSessionWithExpectedPartCount()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
 
         var result = await sut.InitAsync(new InitMultipartUploadRequestDto
@@ -36,7 +37,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             FileSize = 5,
             PartSize = 2,
             ContentType = "video/mp4"
-        });
+        }, cancellationToken);
 
         Assert.NotEqual(Guid.Empty, result.UploadId);
         Assert.Equal(_tenantId, result.TenantId);
@@ -54,8 +55,9 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     [Fact]
     public async Task UploadPartAsync_WritesPartAndMovesSessionToUploading()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
-        var init = await InitAsync(sut);
+        var init = await InitAsync(sut, cancellationToken: cancellationToken);
         var bytes = Encoding.UTF8.GetBytes("he");
 
         var result = await sut.UploadPartAsync(new UploadMultipartPartRequestDto
@@ -65,7 +67,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             Content = new MemoryStream(bytes),
             ContentLength = bytes.Length,
             PartChecksumSha256 = Sha256(bytes)
-        });
+        }, cancellationToken);
 
         Assert.Equal(init.UploadId, result.UploadId);
         Assert.Equal(1, result.PartNumber);
@@ -82,18 +84,19 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     [Fact]
     public async Task CompleteAsync_WhenAllPartsUploaded_QueuesBackgroundMerge()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var content = Encoding.UTF8.GetBytes("hello");
-        var init = await InitAsync(sut, expectedChecksum: Sha256(content));
+        var init = await InitAsync(sut, expectedChecksum: Sha256(content), cancellationToken);
 
-        await UploadPartAsync(sut, init.UploadId, 1, "he");
-        await UploadPartAsync(sut, init.UploadId, 2, "ll");
-        await UploadPartAsync(sut, init.UploadId, 3, "o");
+        await UploadPartAsync(sut, init.UploadId, 1, "he", cancellationToken);
+        await UploadPartAsync(sut, init.UploadId, 2, "ll", cancellationToken);
+        await UploadPartAsync(sut, init.UploadId, 3, "o", cancellationToken);
 
         var result = await sut.CompleteAsync(new CompleteMultipartUploadRequestDto
         {
             UploadId = init.UploadId
-        });
+        }, cancellationToken);
 
         Assert.Equal(MultipartUploadStatus.Completing, result.Status);
         Assert.Null(result.FinalChecksumSha256);
@@ -108,45 +111,47 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
     [Fact]
     public async Task MultipartBackgroundProcessor_MergesFileAndCleansTempParts()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var processor = CreateProcessor();
         var content = Encoding.UTF8.GetBytes("hello");
-        var init = await InitAsync(sut, expectedChecksum: Sha256(content));
+        var init = await InitAsync(sut, expectedChecksum: Sha256(content), cancellationToken);
 
-        await UploadPartAsync(sut, init.UploadId, 1, "he");
-        await UploadPartAsync(sut, init.UploadId, 2, "ll");
-        await UploadPartAsync(sut, init.UploadId, 3, "o");
+        await UploadPartAsync(sut, init.UploadId, 1, "he", cancellationToken);
+        await UploadPartAsync(sut, init.UploadId, 2, "ll", cancellationToken);
+        await UploadPartAsync(sut, init.UploadId, 3, "o", cancellationToken);
         await sut.CompleteAsync(new CompleteMultipartUploadRequestDto
         {
             UploadId = init.UploadId
-        });
+        }, cancellationToken);
 
-        await processor.MergePartsAsync(init.UploadId);
+        await processor.MergePartsAsync(init.UploadId, cancellationToken);
 
         var session = Assert.Single(_sessions.Items);
         Assert.Equal(MultipartUploadStatus.Completed, session.Status);
         Assert.Equal(Sha256(content), session.FinalChecksumSha256);
         Assert.All(_parts.Items, part => Assert.Equal(MultipartUploadPartStatus.Verified, part.Status));
 
-        var status = await sut.GetStatusAsync(init.UploadId);
+        var status = await sut.GetStatusAsync(init.UploadId, cancellationToken);
         Assert.NotNull(status);
         Assert.Equal(MultipartUploadStatus.Completed, status.Status);
         Assert.Equal(Sha256(content), status.FinalChecksumSha256);
         Assert.True(File.Exists(status.PhysicalPath));
-        Assert.Equal("hello", await File.ReadAllTextAsync(status.PhysicalPath));
+        Assert.Equal("hello", await File.ReadAllTextAsync(status.PhysicalPath, cancellationToken));
         Assert.False(Directory.Exists(Path.Combine(_rootPath, session.TempStoragePrefix)));
     }
 
     [Fact]
     public async Task AbortAsync_RemovesUploadedPartsAndMarksSessionAborted()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
-        var init = await InitAsync(sut);
-        await UploadPartAsync(sut, init.UploadId, 1, "he");
+        var init = await InitAsync(sut, cancellationToken: cancellationToken);
+        await UploadPartAsync(sut, init.UploadId, 1, "he", cancellationToken);
         var session = Assert.Single(_sessions.Items);
         Assert.True(Directory.Exists(Path.Combine(_rootPath, session.TempStoragePrefix)));
 
-        var result = await sut.AbortAsync(init.UploadId);
+        var result = await sut.AbortAsync(init.UploadId, cancellationToken);
 
         Assert.Equal(init.UploadId, result.UploadId);
         Assert.Equal(MultipartUploadStatus.Aborted, result.Status);
@@ -168,10 +173,8 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             _parts,
             _queue,
             CreateApplicationPaths(),
-            Options.Create(new FileStorageMultipartOptions
+            Options.Create(new MultipartSettingOptions
             {
-                TempFolderName = "_multipart",
-                FilesFolderName = "files",
                 MinPartSizeBytes = 1,
                 MaxPartSizeBytes = 10
             }),
@@ -195,13 +198,14 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             BasePath = _rootPath,
             LogsPath = Path.Combine(_rootPath, "logs"),
             DataPath = Path.Combine(_rootPath, "data"),
-            MultipartTempPath = Path.Combine(_rootPath, "temp")
+            TempPath = Path.Combine(_rootPath, "temp")
         };
     }
 
     private Task<InitMultipartUploadResultDto> InitAsync(
         FileStorageMultipartService sut,
-        string? expectedChecksum = null)
+        string? expectedChecksum = null,
+        CancellationToken cancellationToken = default)
     {
         return sut.InitAsync(new InitMultipartUploadRequestDto
         {
@@ -211,14 +215,15 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             PartSize = 2,
             ContentType = "text/plain",
             ExpectedChecksumSha256 = expectedChecksum
-        });
+        }, cancellationToken);
     }
 
     private static Task<UploadMultipartPartResultDto> UploadPartAsync(
         FileStorageMultipartService sut,
         Guid uploadId,
         int partNumber,
-        string content)
+        string content,
+        CancellationToken cancellationToken)
     {
         var bytes = Encoding.UTF8.GetBytes(content);
         return sut.UploadPartAsync(new UploadMultipartPartRequestDto
@@ -228,7 +233,7 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
             Content = new MemoryStream(bytes),
             ContentLength = bytes.Length,
             PartChecksumSha256 = Sha256(bytes)
-        });
+        }, cancellationToken);
     }
 
     private static string Sha256(byte[] bytes)

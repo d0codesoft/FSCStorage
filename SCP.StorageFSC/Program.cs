@@ -1,3 +1,5 @@
+using Microsoft.Extensions.FileProviders;
+using scp.filestorage;
 using scp.filestorage.Data.Dto;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.InterfacesService;
@@ -12,27 +14,60 @@ using SCP.StorageFSC.Security;
 using SCP.StorageFSC.SecurityPermission;
 using SCP.StorageFSC.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// Get parameters from command line arguments
+program_utils.ParseArguments(args);
 
-builder.Host.UseWindowsService();
+var configFilePath = program_utils.GetValueArg("config") ?? Environment.GetEnvironmentVariable("FSCStore_Config");
+var baseDirPath = program_utils.GetValueArg("base_dir") ?? Environment.GetEnvironmentVariable("FSCStore_BaseDir");
 
-builder.Configuration
-    .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile(
-        OperatingSystem.IsWindows()
-            ? "appsettings.Windows.json"
-            : "appsettings.Linux.json",
-        optional: true,
-        reloadOnChange: true)
-    .AddEnvironmentVariables();
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory
+});
+
+builder.Configuration.SetBasePath(builder.Environment.ContentRootPath);
+
+// Configure hosting and services based on the operating system
+if (OperatingSystem.IsWindows())
+{
+    builder.Host.UseWindowsService();
+    builder.Services.AddWindowsService();
+}
+else if (OperatingSystem.IsLinux())
+{
+    builder.Host.UseSystemd();
+}
+
+if (string.IsNullOrEmpty(configFilePath))
+{
+    builder.Configuration
+        .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+        .AddEnvironmentVariables();
+}
+else
+{
+    var fullConfigFilePath = Path.GetFullPath(configFilePath);
+    var configDirectory = Path.GetDirectoryName(fullConfigFilePath);
+    var configFileName = Path.GetFileName(fullConfigFilePath);
+
+    if (string.IsNullOrWhiteSpace(configDirectory) || string.IsNullOrWhiteSpace(configFileName))
+    {
+        throw new ArgumentException("The --config parameter must contain a valid file path.");
+    }
+
+    builder.Configuration.AddJsonFile(
+            provider: new PhysicalFileProvider(configDirectory),
+            path: configFileName,
+            optional: false,
+            reloadOnChange: true)
+        .AddEnvironmentVariables();
+}
 
 builder.Services.RegisterDatabase();
 
-builder.Services.Configure<FileStorageOptions>(
-    builder.Configuration.GetSection("Paths"));
-
-var applicationPaths = ApplicationPaths.FromConfiguration(builder.Configuration);
+// Initialize directory paths
+var applicationPaths = ApplicationPaths.FromConfiguration(builder.Configuration, baseDirPath);
 builder.Services.AddSingleton(applicationPaths);
 
 builder.InitializeDataFolder(applicationPaths);
@@ -86,7 +121,7 @@ builder.Services.AddScoped<IOneTimeCodeSender, OneTimeCodeSender>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 
 
-builder.Services.Configure<FileStorageMultipartOptions>(
+builder.Services.Configure<MultipartSettingOptions>(
     builder.Configuration.GetSection("FileStorageMultipart"));
 
 builder.Services.Configure<FileStorageCleanupOptions>(

@@ -25,6 +25,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task GetTenantsAsync_WhenUserIsNotAdmin_ReturnsOnlyCurrentUsersTenants()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var currentUserId = Guid.CreateVersion7();
         await _tenants.InsertAsync(new Tenant
         {
@@ -32,19 +33,19 @@ public sealed class TenantStorageServiceTests
             Name = "Mine",
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
-        });
+        }, cancellationToken);
         await _tenants.InsertAsync(new Tenant
         {
             UserId = Guid.CreateVersion7(),
             Name = "Other",
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
-        });
+        }, cancellationToken);
 
         SetCurrentUser(currentUserId, isAdmin: false);
         var sut = CreateService();
 
-        var result = await sut.GetTenantsAsync();
+        var result = await sut.GetTenantsAsync(cancellationToken);
 
         var tenant = Assert.Single(result);
         Assert.Equal("Mine", tenant.Name);
@@ -54,6 +55,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task GetTenantTokensAsync_WhenUserIsNotAdmin_ReturnsOnlyCurrentUsersTokens()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var currentUserId = Guid.CreateVersion7();
         var otherUserId = Guid.CreateVersion7();
         var tenant = new Tenant
@@ -63,7 +65,7 @@ public sealed class TenantStorageServiceTests
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
         };
-        await _tenants.InsertAsync(tenant);
+        await _tenants.InsertAsync(tenant, cancellationToken);
 
         await _tokens.InsertAsync(new ApiToken
         {
@@ -74,7 +76,7 @@ public sealed class TenantStorageServiceTests
             TokenPrefix = "prefix1",
             IsActive = true,
             CanRead = true
-        });
+        }, cancellationToken);
 
         await _tokens.InsertAsync(new ApiToken
         {
@@ -85,12 +87,12 @@ public sealed class TenantStorageServiceTests
             TokenPrefix = "prefix2",
             IsActive = true,
             CanRead = true
-        });
+        }, cancellationToken);
 
         SetCurrentUser(currentUserId, isAdmin: false);
         var sut = CreateService();
 
-        var result = await sut.GetTenantTokensAsync(tenant.Id);
+        var result = await sut.GetTenantTokensAsync(tenant.Id, cancellationToken);
 
         var token = Assert.Single(result);
         Assert.Equal("Current user key", token.Name);
@@ -100,6 +102,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task GetUsersWithTenantsAsync_WhenUserIsAdmin_ReturnsUsersWithTheirTenants()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var firstUser = new User
         {
             Id = Guid.CreateVersion7(),
@@ -114,8 +117,8 @@ public sealed class TenantStorageServiceTests
             NormalizedName = "BOB",
             PasswordHash = "hash"
         };
-        await _users.InsertAsync(firstUser);
-        await _users.InsertAsync(secondUser);
+        await _users.InsertAsync(firstUser, cancellationToken);
+        await _users.InsertAsync(secondUser, cancellationToken);
 
         await _tenants.InsertAsync(new Tenant
         {
@@ -123,12 +126,12 @@ public sealed class TenantStorageServiceTests
             Name = "Alice tenant",
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
-        });
+        }, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
         var sut = CreateService();
 
-        var result = await sut.GetUsersWithTenantsAsync();
+        var result = await sut.GetUsersWithTenantsAsync(cancellationToken);
 
         Assert.Equal(2, result.Count);
         Assert.Contains(result, item => item.UserName == "Alice" && item.Tenants.Count == 1);
@@ -138,6 +141,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task UpdateTenantAsync_ChangesNameAndStatus()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var tenant = new Tenant
         {
             UserId = Guid.CreateVersion7(),
@@ -145,7 +149,7 @@ public sealed class TenantStorageServiceTests
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
         };
-        await _tenants.InsertAsync(tenant);
+        await _tenants.InsertAsync(tenant, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
         var sut = CreateService();
@@ -154,7 +158,7 @@ public sealed class TenantStorageServiceTests
         {
             Name = "Beta",
             IsActive = false
-        });
+        }, cancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal("Beta", result!.Name);
@@ -167,6 +171,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task DeleteTenantAsync_RemovesTenant()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var tenant = new Tenant
         {
             UserId = Guid.CreateVersion7(),
@@ -174,20 +179,21 @@ public sealed class TenantStorageServiceTests
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
         };
-        await _tenants.InsertAsync(tenant);
+        await _tenants.InsertAsync(tenant, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
         var sut = CreateService();
 
-        var deleted = await sut.DeleteTenantAsync(tenant.Id);
+        var deleted = await sut.DeleteTenantAsync(tenant.Id, cancellationToken);
 
         Assert.True(deleted);
-        Assert.Null(await _tenants.GetByIdAsync(tenant.Id));
+        Assert.Null(await _tenants.GetByIdAsync(tenant.Id, cancellationToken));
     }
 
     [Fact]
     public async Task CreateTenantAsync_AssignsTenantToRequestedUser()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var owner = new User
         {
             Id = Guid.CreateVersion7(),
@@ -195,7 +201,7 @@ public sealed class TenantStorageServiceTests
             NormalizedName = "OWNER",
             PasswordHash = "hash"
         };
-        await _users.InsertAsync(owner);
+        await _users.InsertAsync(owner, cancellationToken);
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
 
         var sut = CreateService();
@@ -204,15 +210,16 @@ public sealed class TenantStorageServiceTests
         {
             UserId = owner.Id,
             Name = "Tenant A"
-        });
+        }, cancellationToken);
 
         Assert.Equal(owner.Id, result.UserId);
-        Assert.Equal(owner.Id, (await _tenants.GetByIdAsync(result.Id))!.UserId);
+        Assert.Equal(owner.Id, (await _tenants.GetByIdAsync(result.Id, cancellationToken))!.UserId);
     }
 
     [Fact]
     public async Task DeleteUserAsync_RemovesOwnedTenantsAndQueuesDeletedTenantRecords()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var owner = new User
         {
             Id = Guid.CreateVersion7(),
@@ -220,13 +227,13 @@ public sealed class TenantStorageServiceTests
             NormalizedName = "OWNER",
             PasswordHash = "hash"
         };
-        await _users.InsertAsync(owner);
+        await _users.InsertAsync(owner, cancellationToken);
         await _userRoles.InsertAsync(new UserRole
         {
             UserId = Guid.CreateVersion7(),
             RoleId = scp.filestorage.Data.Models.SystemRoles.AdministratorId,
             CreatedUtc = DateTime.UtcNow
-        });
+        }, cancellationToken);
 
         var tenant = new Tenant
         {
@@ -235,7 +242,7 @@ public sealed class TenantStorageServiceTests
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
         };
-        await _tenants.InsertAsync(tenant);
+        await _tenants.InsertAsync(tenant, cancellationToken);
         await _tenantFiles.InsertAsync(new TenantFile
         {
             TenantId = tenant.Id,
@@ -244,7 +251,7 @@ public sealed class TenantStorageServiceTests
             FileName = "file.bin",
             IsActive = true,
             CreatedUtc = DateTime.UtcNow
-        });
+        }, cancellationToken);
         await _storedFiles.InsertAsync(new StoredFile
         {
             Id = _tenantFiles.Items[0].StoredFileId,
@@ -255,16 +262,16 @@ public sealed class TenantStorageServiceTests
             OriginalFileName = "file.bin",
             ReferenceCount = 1,
             CreatedUtc = DateTime.UtcNow
-        });
+        }, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
         var sut = CreateService();
 
-        var deleted = await sut.DeleteUserAsync(owner.Id);
+        var deleted = await sut.DeleteUserAsync(owner.Id, cancellationToken);
 
         Assert.True(deleted);
-        Assert.Null(await _users.GetByIdAsync(owner.Id));
-        Assert.Null(await _tenants.GetByIdAsync(tenant.Id));
+        Assert.Null(await _users.GetByIdAsync(owner.Id, cancellationToken));
+        Assert.Null(await _tenants.GetByIdAsync(tenant.Id, cancellationToken));
         Assert.Single(_deletedTenants.Items);
         Assert.Equal(0, _storedFiles.Items[0].ReferenceCount);
     }
@@ -272,6 +279,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task UpdateApiTokenAsync_ChangesPermissionsAndActivation()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var tenant = new Tenant
         {
             UserId = Guid.CreateVersion7(),
@@ -279,7 +287,7 @@ public sealed class TenantStorageServiceTests
             ExternalTenantId = Guid.CreateVersion7(),
             IsActive = true
         };
-        await _tenants.InsertAsync(tenant);
+        await _tenants.InsertAsync(tenant, cancellationToken);
 
         var token = new ApiToken
         {
@@ -291,7 +299,7 @@ public sealed class TenantStorageServiceTests
             IsActive = true,
             CanRead = true
         };
-        await _tokens.InsertAsync(token);
+        await _tokens.InsertAsync(token, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
         var sut = CreateService();
@@ -306,7 +314,7 @@ public sealed class TenantStorageServiceTests
             IsAdmin = true,
             IsActive = false,
             ExpiresUtc = expiresUtc
-        });
+        }, cancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal("Writer", result!.Name);
@@ -321,6 +329,7 @@ public sealed class TenantStorageServiceTests
     [Fact]
     public async Task CreateTenantAsync_WhenCurrentSessionIsNotAdmin_ThrowsUnauthorizedAccessException()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: false);
         var sut = CreateService();
 
@@ -328,7 +337,7 @@ public sealed class TenantStorageServiceTests
             sut.CreateTenantAsync(new CreateTenantRequest
             {
                 Name = "Forbidden"
-            }));
+            }, cancellationToken));
     }
 
     private TenantStorageService CreateService()

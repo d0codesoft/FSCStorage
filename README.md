@@ -129,6 +129,23 @@ The service reads configuration in this order:
 2. OS-specific settings file
 3. environment variables
 
+### Windows MSI HTTP/HTTPS Configuration
+
+The Windows MSI configures a single installed `appsettings.json` during installation.
+It does not install separate HTTP/HTTPS appsettings variants. Instead, the installer
+asks for one transport mode and updates the `Kestrel:Endpoints` section:
+
+- `HTTP only`: keeps only the HTTP endpoint, usually `http://0.0.0.0:5770`.
+- `HTTPS with existing PFX`: adds an HTTPS endpoint, usually `https://0.0.0.0:5771`,
+  using the PFX path and password entered during installation.
+- `Generate self-signed certificate`: creates a local PFX under the installation
+  directory and configures Kestrel to use it.
+
+For production deployments, prefer a DNS name and a certificate issued by a trusted
+corporate CA or a public CA such as Let's Encrypt. Self-signed certificates are
+best kept for test environments or isolated deployments where the generated
+certificate can be explicitly trusted by all clients.
+
 ### Run as a Linux Service
 
 The repository includes scripts for installing FSC Storage as a Linux `systemd` service:

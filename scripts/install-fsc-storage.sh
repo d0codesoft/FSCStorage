@@ -1,23 +1,17 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-SERVICE_NAME="fsc-storage"
-SERVICE_USER="fstore"
-SERVICE_GROUP="fstore"
+REPO_URL="${FSC_STORAGE_REPO_URL:-https://github.com/d0codesoft/FSCStorage.git}"
+REPO_REF="${FSC_STORAGE_REF:-}"
 
-APP_DIR="/opt/fsc-storage"
-BASE_DIR="/var/lib/fsc-storage"
-DATA_DIR="/var/lib/fsc-storage/data"
-LOG_DIR="/var/log/fsc-storage"
+SERVICE_NAME="fsc_storage"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+SERVICE_USER="fsc-user"
+SERVICE_GROUP="fsc-user"
 
-SYSTEMD_DIR="/etc/systemd/system"
-ENV_DIR="/etc/default"
-SERVICE_FILE="${SERVICE_NAME}.service"
-ENV_FILE="${SERVICE_NAME}-env"
-
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-SOURCE_SERVICE="${SCRIPT_DIR}/${SERVICE_FILE}"
-SOURCE_ENV="${SCRIPT_DIR}/${ENV_FILE}"
+APP_DIR="/opt/fsc.storage"
+ENV_FILE="/etc/default/fscstorage-env"
+DEFAULT_ROOT="/var/lib/fsc.storage"
 
 log() {
     printf '%s\n' "$1"
@@ -30,133 +24,284 @@ fail() {
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
-        fail "This script must be run as root."
+        fail "Run this script as root."
     fi
 }
 
-require_command() {
-    command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
-}
+require_ubuntu() {
+    if [ ! -r /etc/os-release ]; then
+        fail "/etc/os-release was not found."
+    fi
 
-create_group() {
-    if getent group "${SERVICE_GROUP}" >/dev/null 2>&1; then
-        log "Group '${SERVICE_GROUP}' already exists."
-    else
-        log "Creating group '${SERVICE_GROUP}'."
-        groupadd --system "${SERVICE_GROUP}"
+    # shellcheck disable=SC1091
+    . /etc/os-release
+
+    if [ "${ID:-}" != "ubuntu" ]; then
+        fail "This installer supports Ubuntu only. Current OS: ${PRETTY_NAME:-unknown}."
+    fi
+
+    UBUNTU_VERSION_ID="${VERSION_ID:-}"
+    if [ -z "$UBUNTU_VERSION_ID" ]; then
+        fail "Could not detect Ubuntu VERSION_ID."
     fi
 }
 
-create_user() {
-    if id -u "${SERVICE_USER}" >/dev/null 2>&1; then
-        log "User '${SERVICE_USER}' already exists."
+install_packages() {
+    log "Installing required packages."
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        git \
+        python3
+
+    if ! command -v dotnet >/dev/null 2>&1 || ! dotnet --list-sdks | grep -Eq '^10\.'; then
+        log "Installing Microsoft package repository for Ubuntu ${UBUNTU_VERSION_ID}."
+        local packages_deb="/tmp/packages-microsoft-prod.deb"
+
+        curl -fsSL \
+            "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION_ID}/packages-microsoft-prod.deb" \
+            -o "$packages_deb"
+        dpkg -i "$packages_deb"
+        rm -f "$packages_deb"
+
+        apt-get update
+        apt-get install -y --no-install-recommends dotnet-sdk-10.0
+    fi
+
+    command -v dotnet >/dev/null 2>&1 || fail "dotnet was not installed."
+    dotnet --list-sdks | grep -Eq '^10\.' || fail ".NET 10 SDK was not installed."
+}
+
+read_root_path() {
+    local root_path
+
+    printf 'Enter storage root path [{Root}] [%s]: ' "$DEFAULT_ROOT"
+    read -r root_path
+    root_path="${root_path:-$DEFAULT_ROOT}"
+
+    case "$root_path" in
+        /*) ;;
+        *) fail "Storage root path must be absolute: ${root_path}" ;;
+    esac
+
+    case "$root_path" in
+        *[[:space:]]*|*"'"*|*'"'*)
+            fail "Storage root path must not contain spaces or quotes: ${root_path}"
+            ;;
+    esac
+
+    ROOT_PATH="${root_path%/}"
+    if [ -z "$ROOT_PATH" ]; then
+        fail "Storage root path cannot be empty."
+    fi
+}
+
+create_service_account() {
+    if getent group "$SERVICE_GROUP" >/dev/null 2>&1; then
+        log "Group ${SERVICE_GROUP} already exists."
     else
-        log "Creating system user '${SERVICE_USER}'."
+        log "Creating group ${SERVICE_GROUP}."
+        groupadd --system "$SERVICE_GROUP"
+    fi
+
+    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+        log "User ${SERVICE_USER} already exists."
+    else
+        log "Creating user ${SERVICE_USER}."
         useradd \
             --system \
-            --gid "${SERVICE_GROUP}" \
-            --home-dir "${APP_DIR}" \
+            --gid "$SERVICE_GROUP" \
+            --home-dir "$APP_DIR" \
             --shell /usr/sbin/nologin \
-            "${SERVICE_USER}"
+            "$SERVICE_USER"
     fi
 }
 
 create_directories() {
-    log "Creating application and data directories."
-    install -d -m 0755 -o root -g root "${APP_DIR}"
-    install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${BASE_DIR}"
-    install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${DATA_DIR}"
-    install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" "${LOG_DIR}"
+    log "Creating application and storage directories."
+    install -d -m 0755 -o root -g root "$APP_DIR"
+    install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$ROOT_PATH"
+    install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$ROOT_PATH/logs"
+    install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$ROOT_PATH/data"
+    install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$ROOT_PATH/temp"
 }
 
-install_files() {
-    [ -f "${SOURCE_SERVICE}" ] || fail "Service file not found: ${SOURCE_SERVICE}"
-    [ -f "${SOURCE_ENV}" ] || fail "Environment file not found: ${SOURCE_ENV}"
+prepare_build_dir() {
+    BUILD_DIR="$(mktemp -d /tmp/fsc-storage-build.XXXXXX)"
+    PUBLISH_DIR="$BUILD_DIR/publish"
 
-    log "Installing systemd service file."
-    install -m 0644 -o root -g root "${SOURCE_SERVICE}" "${SYSTEMD_DIR}/${SERVICE_FILE}"
+    cleanup() {
+        if [ -n "${BUILD_DIR:-}" ] && [ -d "$BUILD_DIR" ]; then
+            rm -rf "$BUILD_DIR"
+        fi
+    }
 
-    log "Installing environment file."
-    install -m 0640 -o root -g "${SERVICE_GROUP}" "${SOURCE_ENV}" "${ENV_DIR}/${ENV_FILE}"
+    trap cleanup EXIT
 }
 
-validate_environment_file() {
-    log "Validating environment file."
-    grep -q '^Paths__BasePath=/var/lib/fsc-storage$' "${ENV_DIR}/${ENV_FILE}" \
-        || fail "Paths__BasePath is not configured correctly."
-    grep -q '^Paths__LogsPath=/var/log/fsc-storage$' "${ENV_DIR}/${ENV_FILE}" \
-        || fail "Paths__LogsPath is not configured correctly."
-    grep -q '^Paths__DataPath=/var/lib/fsc-storage/data$' "${ENV_DIR}/${ENV_FILE}" \
-        || fail "Paths__DataPath is not configured correctly."
+clone_sources() {
+    log "Cloning sources from ${REPO_URL}."
+    git clone "$REPO_URL" "$BUILD_DIR/src"
+
+    if [ -n "$REPO_REF" ]; then
+        log "Checking out ${REPO_REF}."
+        git -C "$BUILD_DIR/src" checkout "$REPO_REF"
+    fi
 }
 
-validate_service_file() {
-    log "Validating systemd service file."
-    grep -q '^User=fstore$' "${SYSTEMD_DIR}/${SERVICE_FILE}" \
-        || fail "Service user is not configured as fstore."
-    grep -q '^Group=fstore$' "${SYSTEMD_DIR}/${SERVICE_FILE}" \
-        || fail "Service group is not configured as fstore."
-    grep -q '^EnvironmentFile=/etc/default/fsc-storage-env$' "${SYSTEMD_DIR}/${SERVICE_FILE}" \
-        || fail "Service environment file path is not configured correctly."
+publish_service() {
+    log "Publishing service build."
+    dotnet publish "$BUILD_DIR/src/SCP.StorageFSC/scp.filestorage.csproj" \
+        --configuration Release \
+        --runtime linux-x64 \
+        --self-contained false \
+        --output "$PUBLISH_DIR" \
+        /p:PublishSingleFile=false
 }
 
-validate_permissions() {
-    log "Validating directory ownership and permissions."
-    [ -d "${APP_DIR}" ] || fail "Application directory was not created: ${APP_DIR}"
-    [ -d "${BASE_DIR}" ] || fail "Base directory was not created: ${BASE_DIR}"
-    [ -d "${DATA_DIR}" ] || fail "Data directory was not created: ${DATA_DIR}"
-    [ -d "${LOG_DIR}" ] || fail "Log directory was not created: ${LOG_DIR}"
+install_application() {
+    log "Installing published files to ${APP_DIR}."
 
-    su -s /bin/sh -c "test -w '${BASE_DIR}' && test -w '${DATA_DIR}' && test -w '${LOG_DIR}'" "${SERVICE_USER}" \
-        || fail "Service user cannot write to one or more data directories."
+    if systemctl list-unit-files "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+        systemctl stop "${SERVICE_NAME}.service" >/dev/null 2>&1 || true
+    fi
+
+    find "$APP_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    cp -a "$PUBLISH_DIR/." "$APP_DIR/"
+    chown -R root:root "$APP_DIR"
+    find "$APP_DIR" -type d -exec chmod 0755 {} +
+    find "$APP_DIR" -type f -exec chmod 0644 {} +
 }
 
-configure_systemd() {
-    log "Reloading systemd daemon."
+write_appsettings() {
+    local appsettings="$APP_DIR/appsettings.json"
+
+    [ -f "$appsettings" ] || fail "Published appsettings.json was not found: ${appsettings}"
+
+    log "Writing {Root} path to appsettings.json."
+    python3 - "$appsettings" "$ROOT_PATH" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+appsettings = Path(sys.argv[1])
+root_path = sys.argv[2]
+
+with appsettings.open("r", encoding="utf-8") as stream:
+    data = json.load(stream)
+
+paths = data.setdefault("Paths", {})
+paths["BasePath"] = root_path
+paths["LogsPath"] = "{Root}/logs"
+paths["DataPath"] = "{Root}/data"
+paths["TempPath"] = "{Root}/temp"
+
+with appsettings.open("w", encoding="utf-8") as stream:
+    json.dump(data, stream, indent=2, ensure_ascii=False)
+    stream.write("\n")
+PY
+
+    chown root:"$SERVICE_GROUP" "$appsettings"
+    chmod 0640 "$appsettings"
+}
+
+write_environment_file() {
+    log "Writing ${ENV_FILE}."
+    cat >"$ENV_FILE" <<'EOF'
+ASPNETCORE_ENVIRONMENT=Production
+DOTNET_NOLOGO=true
+DOTNET_CLI_TELEMETRY_OPTOUT=1
+DOTNET_PRINT_TELEMETRY_MESSAGE=false
+EOF
+
+    chown root:"$SERVICE_GROUP" "$ENV_FILE"
+    chmod 0640 "$ENV_FILE"
+}
+
+write_service_file() {
+    log "Writing ${SERVICE_FILE}."
+    cat >"$SERVICE_FILE" <<EOF
+[Unit]
+Description=File storage service
+After=network.target
+
+[Service]
+WorkingDirectory=${APP_DIR}
+ExecStart=/usr/bin/dotnet ${APP_DIR}/scp.filestorage.dll
+
+SyslogIdentifier=fsc-storage
+User=${SERVICE_USER}
+Group=${SERVICE_GROUP}
+
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+RestartForceExitStatus=SIGABRT SIGSEGV
+
+Type=notify
+WatchdogSec=30
+NotifyAccess=main
+
+StandardOutput=journal
+StandardError=journal
+
+ReadWritePaths=${ROOT_PATH} ${APP_DIR}
+
+EnvironmentFile=${ENV_FILE}
+
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    chown root:root "$SERVICE_FILE"
+    chmod 0644 "$SERVICE_FILE"
+}
+
+enable_service() {
+    log "Reloading systemd and enabling ${SERVICE_NAME}.service."
     systemctl daemon-reload
-
-    log "Enabling ${SERVICE_NAME}.service."
     systemctl enable "${SERVICE_NAME}.service"
-
-    if systemctl is-enabled "${SERVICE_NAME}.service" >/dev/null 2>&1; then
-        log "Service is enabled."
-    else
-        fail "Service was not enabled."
-    fi
 }
 
-print_runtime_note() {
-    if [ ! -f "${APP_DIR}/scp.filestorage.dll" ]; then
-        log "WARNING: ${APP_DIR}/scp.filestorage.dll was not found."
-        log "Copy the published application files to ${APP_DIR} before starting the service."
-    fi
+validate_installation() {
+    log "Validating installation."
 
-    log "Installation completed successfully."
-    log "Start the service with: systemctl start ${SERVICE_NAME}.service"
-    log "Check status with: systemctl status ${SERVICE_NAME}.service"
+    [ -f "$APP_DIR/scp.filestorage.dll" ] || fail "Service dll was not installed."
+    [ -f "$APP_DIR/appsettings.json" ] || fail "appsettings.json was not installed."
+    [ -f "$SERVICE_FILE" ] || fail "systemd service file was not created."
+
+    su -s /bin/sh -c "test -w '$ROOT_PATH' && test -w '$ROOT_PATH/logs' && test -w '$ROOT_PATH/data' && test -w '$ROOT_PATH/temp'" "$SERVICE_USER" \
+        || fail "Service user cannot write to one or more storage directories."
 }
 
 main() {
-    log "Installing FSC Storage Linux service."
-
     require_root
-    require_command getent
-    require_command groupadd
-    require_command useradd
-    require_command install
-    require_command grep
-    require_command systemctl
-    require_command su
-
-    create_group
-    create_user
+    require_ubuntu
+    install_packages
+    read_root_path
+    create_service_account
     create_directories
-    install_files
-    validate_environment_file
-    validate_service_file
-    validate_permissions
-    configure_systemd
-    print_runtime_note
+    prepare_build_dir
+    clone_sources
+    publish_service
+    install_application
+    write_appsettings
+    write_environment_file
+    write_service_file
+    enable_service
+    validate_installation
+
+    log "Installation completed."
+    log "Start service: systemctl start ${SERVICE_NAME}.service"
+    log "Check status: systemctl status ${SERVICE_NAME}.service"
+    log "Storage root: ${ROOT_PATH}"
 }
 
 main "$@"

@@ -17,7 +17,7 @@
         Standard WixUI_InstallDir UI.
         The custom ServiceAccountDlg is inserted between InstallDirDlg and VerifyReadyDlg below.
         -->
-		<ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+		<ui:WixUI Id="FscStorage_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
 		<WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)assets\license.rtf" />
 		<WixVariable Id="WixUIDialogBmp" Value="$(sys.SOURCEFILEDIR)assets\dialog.png" />
@@ -25,6 +25,13 @@
 
 		<!-- Service installation properties. Public properties are uppercase. -->
 		<Property Id="INSTALL_AS_SERVICE" Value="1" Secure="yes" />
+		<Property Id="START_SERVICE" Value="1" Secure="yes" />
+		<Property Id="CHANGE_CONFIG" Value="0" Secure="yes" />
+		<Property Id="TRANSPORT_MODE" Value="HTTP" Secure="yes" />
+		<Property Id="EXISTING_PFX_PATH" Secure="yes" />
+		<Property Id="EXISTING_PFX_PASSWORD" Secure="yes" Hidden="yes" />
+		<Property Id="SELF_SIGNED_DNS_NAMES" Value="localhost" Secure="yes" />
+		<Property Id="SELF_SIGNED_PFX_PASSWORD" Secure="yes" Hidden="yes" />
 
 		<!-- SYSTEM / EXISTING / CREATE -->
 		<Property Id="SERVICE_ACCOUNT_MODE" Value="SYSTEM" Secure="yes" />
@@ -39,41 +46,99 @@
 		<Property Id="SERVICE_CREATE_PASSWORD" Secure="yes" Hidden="yes" />
 		<Property Id="SERVICE_CREATE_PASSWORD_CONFIRM" Secure="yes" Hidden="yes" />
 
-		<UI>
-			<!-- Insert custom dialog after installation folder selection. -->
-			<Publish Dialog="InstallDirDlg"
-					 Control="Next"
-					 Event="NewDialog"
-					 Value="ServiceAccountDlg"
-					 Order="5"
-					 Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+		<Property Id="INSTALLFOLDER">
+			<RegistrySearch
+			  Id="InstallFolderRegistrySearch"
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="InstallFolder"
+			  Type="raw" />
+		</Property>
 
-			<!-- Return from VerifyReadyDlg to the custom service account dialog. -->
-			<Publish Dialog="VerifyReadyDlg"
-					 Control="Back"
-					 Event="NewDialog"
-					 Value="ServiceAccountDlg"
-					 Order="1"
-					 Condition="NOT Installed" />
-		</UI>
+		<Property Id="DATAFOLDER" Secure="yes">
+			<RegistrySearch
+			  Id="DataFolderRegistrySearch"
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="DataFolder"
+			  Type="raw" />
+		</Property>
 
 		<StandardDirectory Id="ProgramFiles64Folder">
 			<Directory Id="INSTALLFOLDER" Name="FSCStorage" />
 		</StandardDirectory>
+		<StandardDirectory Id="CommonAppDataFolder">
+			<Directory Id="DATAFOLDER" Name="FSCStorage" />
+		</StandardDirectory>
 
 		<Feature Id="MainFeature" Title="FSC Storage Service" Level="1">
+			<ComponentRef Id="DataFolderComponent" />
+			<ComponentRef Id="InstallFolderRegistryComponent" />
+			<ComponentRef Id="AppSettingsComponent" />
+			<ComponentRef Id="InstallerToolComponent" />
 			<ComponentRef Id="ServiceComponent" />
+			<ComponentRef Id="StartServiceComponent" />
 			<ComponentRef Id="FscStorageServiceUserComponent" />
 			<ComponentGroupRef Id="PublishedFiles" />
 		</Feature>
+
+		<SetProperty
+			Id="ConfigureTransport"
+			Value="&quot;[#InstallerToolExe]&quot; -i &quot;[INSTALLFOLDER].&quot; -m &quot;[TRANSPORT_MODE]&quot; -x &quot;[EXISTING_PFX_PATH]&quot; -xp &quot;[EXISTING_PFX_PASSWORD]&quot; -gp &quot;[SELF_SIGNED_PFX_PASSWORD]&quot; -n &quot;[SELF_SIGNED_DNS_NAMES]&quot;"
+			Before="ConfigureTransport"
+			Sequence="execute" />
+
+		<CustomAction
+		  Id="ConfigureTransport"
+		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+		  DllEntry="WixSilentExec"
+		  Execute="deferred"
+		  Impersonate="no"
+		  Return="check"
+		  HideTarget="yes" />
+
+		<InstallExecuteSequence>
+			<Custom Action="ConfigureTransport" After="InstallFiles" Condition="(NOT Installed AND NOT WIX_UPGRADE_DETECTED) OR CHANGE_CONFIG=&quot;1&quot;" />
+		</InstallExecuteSequence>
 	</Package>
 
 	<Fragment>
+		<Component Id="DataFolderComponent" Directory="DATAFOLDER" Guid="*">
+			<CreateFolder />
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="DataFolder"
+			  Type="string"
+			  Value="[DATAFOLDER]"
+			  KeyPath="yes" />
+		</Component>
+
+		<Component Id="InstallFolderRegistryComponent" Directory="INSTALLFOLDER" Guid="*">
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="InstallFolder"
+			  Type="string"
+			  Value="[INSTALLFOLDER]"
+			  KeyPath="yes" />
+		</Component>
+
+		<Component Id="InstallerToolComponent" Directory="INSTALLFOLDER" Guid="*">
+			<File Id="InstallerToolExe" Source="$(var.PublishDir)\FSCStorage.InstallerTool.exe" KeyPath="yes" />
+		</Component>
+
 		<ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
 			<Files Include="$(var.PublishDir)\**">
+				<Exclude Files="$(var.PublishDir)\appsettings.json" />
 				<Exclude Files="$(var.PublishDir)\scp.filestorage.exe" />
+				<Exclude Files="$(var.PublishDir)\FSCStorage.InstallerTool.exe" />
 			</Files>
 		</ComponentGroup>
+
+		<Component Id="AppSettingsComponent" Directory="INSTALLFOLDER" Guid="*" NeverOverwrite="yes" Permanent="yes">
+			<File Id="AppSettingsJson" Source="$(var.PublishDir)\appsettings.json" KeyPath="yes" />
+		</Component>
 
 		<!--
       Service component is installed only when INSTALL_AS_SERVICE=1.
@@ -87,11 +152,12 @@
 			  Type="ownProcess"
 			  Name="fsc-storage"
 			  DisplayName="FSC Storage Service"
-			  Description="SCP File Storage Service"
+			  Description="Simple File Storage Service"
 			  Start="auto"
 			  ErrorControl="normal"
 			  Account="[SERVICEACCOUNT]"
-			  Password="[SERVICEPASSWORD]">
+			  Password="[SERVICEPASSWORD]"
+			  Arguments="--base_dir &quot;[DATAFOLDER].&quot;">
 				<util:ServiceConfig
 				  FirstFailureActionType="restart"
 				  SecondFailureActionType="restart"
@@ -103,9 +169,28 @@
 			<ServiceControl
 			  Id="FscStorageServiceControl"
 			  Name="fsc-storage"
-			  Start="install"
 			  Stop="both"
 			  Remove="uninstall"
+			  Wait="yes" />
+		</Component>
+
+		<!--
+      Starts the service only when the user requests it. If startup fails, the
+      standard MSI error dialog lets the user retry, ignore, or cancel.
+    -->
+		<Component Id="StartServiceComponent" Directory="INSTALLFOLDER" Guid="*" Condition='INSTALL_AS_SERVICE="1" AND START_SERVICE="1"'>
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="StartServiceComponent"
+			  Type="integer"
+			  Value="1"
+			  KeyPath="yes" />
+
+			<ServiceControl
+			  Id="FscStorageServiceStartControl"
+			  Name="fsc-storage"
+			  Start="install"
 			  Wait="yes" />
 		</Component>
 
@@ -133,8 +218,614 @@
 		</Component>
 	</Fragment>
 
+	<?foreach WIXUIARCH in X86;X64;A64 ?>
 	<Fragment>
-		<UI>
+		<UI Id="FscStorage_InstallDir_$(WIXUIARCH)">
+			<Publish Dialog="BrowseDlg" Control="OK" Event="CheckTargetPath" Value="[_BrowseProperty]" Order="1" />
+
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="CheckTargetPath" Value="[WIXUI_INSTALLDIR]" Order="1" />
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="DataDirDlg" Order="4" />
+		</UI>
+
+		<UIRef Id="FscStorage_InstallDir" />
+	</Fragment>
+	<?endforeach?>
+
+	<?foreach WIXUIARCH in X86;X64;A64 ?>
+	<Fragment>
+		<UI Id="FscStorage_InstallDir_ExtendedPathValidation_$(WIXUIARCH)">
+			<Publish Dialog="BrowseDlg" Control="OK" Event="DoAction" Value="WixUIValidatePath_$(WIXUIARCH)" Order="1" />
+			<Publish Dialog="BrowseDlg" Control="OK" Event="SpawnDialog" Value="InvalidDirDlg" Order="2" Condition="WIXUI_INSTALLDIR_VALID&lt;&gt;&quot;1&quot;" />
+
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="DoAction" Value="WixUIValidatePath_$(WIXUIARCH)" Order="1" />
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="SpawnDialog" Value="InvalidDirDlg" Order="2" Condition="WIXUI_INSTALLDIR_VALID&lt;&gt;&quot;1&quot;" />
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="DataDirDlg" Order="4" Condition="WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+		</UI>
+
+		<UIRef Id="FscStorage_InstallDir" />
+	</Fragment>
+	<?endforeach?>
+
+	<Fragment>
+		<UI Id="file FscStorage_InstallDir">
+			<TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+			<TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+			<TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+
+			<Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+
+			<DialogRef Id="BrowseDlg" />
+			<DialogRef Id="DiskCostDlg" />
+			<DialogRef Id="ErrorDlg" />
+			<DialogRef Id="FatalError" />
+			<DialogRef Id="FilesInUse" />
+			<DialogRef Id="MsiRMFilesInUse" />
+			<DialogRef Id="PrepareDlg" />
+			<DialogRef Id="ProgressDlg" />
+			<DialogRef Id="ResumeDlg" />
+			<DialogRef Id="UserExit" />
+
+			<UIRef Id="FscStorageServiceUI" />
+
+			<Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="UpgradeDetectedDlg" Order="1" Condition="WIX_UPGRADE_DETECTED" />
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="LicenseAgreementDlg" Order="2" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceWelcomeDlg" Order="3" Condition="Installed AND NOT PATCH" />
+			<Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" Order="4" Condition="Installed AND PATCH" />
+
+			<Publish Dialog="UpgradeDetectedDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
+			<Publish Dialog="UpgradeDetectedDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
+
+			<Publish Dialog="LicenseAgreementDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" />
+			<Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Condition="LicenseAccepted = &quot;1&quot;" />
+
+			<Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" />
+			<Publish Dialog="InstallDirDlg" Control="Next" Event="SetTargetPath" Value="[WIXUI_INSTALLDIR]" Order="3" />
+			<Publish Dialog="InstallDirDlg" Control="ChangeFolder" Property="_BrowseProperty" Value="[WIXUI_INSTALLDIR]" Order="1" />
+			<Publish Dialog="InstallDirDlg" Control="ChangeFolder" Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+
+			<Publish Dialog="BrowseDlg" Control="OK" Event="SetTargetPath" Value="[_BrowseProperty]" Order="3" />
+			<Publish Dialog="BrowseDlg" Control="OK" Event="EndDialog" Value="Return" Order="4" />
+
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ServiceAccountDlg" Order="1" Condition="CHANGE_CONFIG=&quot;1&quot;" />
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="ServiceAccountDlg" Order="2" Condition="NOT Installed AND NOT WIX_UPGRADE_DETECTED" />
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="UpgradeDetectedDlg" Order="3" Condition="WIX_UPGRADE_DETECTED" />
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="FscMaintenanceTypeDlg" Order="4" Condition="Installed AND NOT PATCH" />
+			<Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="5" Condition="Installed AND PATCH" />
+
+			<Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="FscMaintenanceTypeDlg" />
+
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="RepairButton" Event="ReinstallMode" Value="amus" Order="1" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="RepairButton" Event="Reinstall" Value="ALL" Order="2" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" Order="3" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="RemoveButton" Event="Remove" Value="ALL" Order="1" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" Order="2" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="ChangeConfigButton" Property="CHANGE_CONFIG" Value="1" Order="1" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="ChangeConfigButton" Event="ReinstallMode" Value="amus" Order="2" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="ChangeConfigButton" Event="Reinstall" Value="ALL" Order="3" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="ChangeConfigButton" Event="NewDialog" Value="DataDirDlg" Order="4" />
+			<Publish Dialog="FscMaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+
+			<Property Id="ARPNOMODIFY" Value="1" />
+		</UI>
+
+		<UIRef Id="WixUI_Common" />
+	</Fragment>
+
+	<Fragment>
+		<UI Id="FscStorageServiceUI">
+			<Dialog Id="UpgradeDetectedDlg"
+					Width="370"
+					Height="270"
+					Title="FSC Storage Service">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Обновление FSC Storage Service" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Обнаружена установленная версия. Будет выполнено обновление." />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="Body"
+						 Type="Text"
+						 X="25"
+						 Y="75"
+						 Width="320"
+						 Height="80"
+						 Text="Параметры хранения данных, HTTP/HTTPS и учетной записи службы не будут запрошены повторно. Существующий appsettings.json будет сохранен." />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)" />
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)" />
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="FscMaintenanceTypeDlg"
+					Width="370"
+					Height="270"
+					Title="FSC Storage Service">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Обслуживание FSC Storage Service" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Выберите действие для установленного приложения." />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="RepairButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="72"
+						 Width="130"
+						 Height="20"
+						 Text="Восстановить" />
+
+				<Control Id="RepairText"
+						 Type="Text"
+						 X="180"
+						 Y="73"
+						 Width="160"
+						 Height="28"
+						 Text="Переустановить файлы и восстановить компоненты." />
+
+				<Control Id="ChangeConfigButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="112"
+						 Width="130"
+						 Height="20"
+						 Text="Изменить настройки" />
+
+				<Control Id="ChangeConfigText"
+						 Type="Text"
+						 X="180"
+						 Y="113"
+						 Width="160"
+						 Height="40"
+						 Text="Изменить директорию данных, HTTP/HTTPS и параметры службы." />
+
+				<Control Id="RemoveButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="164"
+						 Width="130"
+						 Height="20"
+						 Text="Удалить" />
+
+				<Control Id="RemoveText"
+						 Type="Text"
+						 X="180"
+						 Y="165"
+						 Width="160"
+						 Height="28"
+						 Text="Удалить FSC Storage Service с этого компьютера." />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)" />
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="DataDirDlg"
+					Width="370"
+					Height="270"
+					Title="FSC Storage Service">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Хранилище данных FSC Storage" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Выберите директорию для базы данных, файлов и журналов." />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="DataFolderLabel"
+						 Type="Text"
+						 X="20"
+						 Y="72"
+						 Width="320"
+						 Height="30"
+						 Text="Директория хранения данных:" />
+
+				<Control Id="DataFolderEdit"
+						 Type="PathEdit"
+						 X="20"
+						 Y="110"
+						 Width="260"
+						 Height="18"
+						 Property="DATAFOLDER" />
+
+				<Control Id="DataFolderBrowse"
+						 Type="PushButton"
+						 X="286"
+						 Y="110"
+						 Width="56"
+						 Height="18"
+						 Text="Обзор...">
+					<Publish Property="_BrowseProperty" Value="DATAFOLDER" Order="1" />
+					<Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+				</Control>
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="FscMaintenanceTypeDlg" Order="1" Condition="CHANGE_CONFIG=&quot;1&quot;" />
+					<Publish Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="CHANGE_CONFIG&lt;&gt;&quot;1&quot;" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+					<Publish Event="CheckTargetPath" Value="DATAFOLDER" Order="1" />
+					<Publish Event="SetTargetPath" Value="DATAFOLDER" Order="2" />
+					<Publish Event="NewDialog" Value="TransportDlg" Order="3" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="TransportDlg"
+					Width="370"
+					Height="270"
+					Title="FSC Storage Service">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Настройка HTTP/HTTPS" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="Выберите, как сервис будет принимать подключения." />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="TransportModeGroup"
+						 Type="RadioButtonGroup"
+						 X="20"
+						 Y="60"
+						 Width="320"
+						 Height="66"
+						 Property="TRANSPORT_MODE">
+					<RadioButtonGroup Property="TRANSPORT_MODE">
+						<RadioButton Value="HTTP"
+									 X="0"
+									 Y="0"
+									 Width="260"
+									 Height="17"
+									 Text="HTTP only" />
+
+						<RadioButton Value="EXISTING_PFX"
+									 X="0"
+									 Y="22"
+									 Width="260"
+									 Height="17"
+									 Text="HTTPS with existing PFX" />
+
+						<RadioButton Value="SELF_SIGNED"
+									 X="0"
+									 Y="44"
+									 Width="260"
+									 Height="17"
+									 Text="Generate self-signed certificate" />
+					</RadioButtonGroup>
+				</Control>
+
+				<Control Id="ExistingPfxPathLabel"
+						 Type="Text"
+						 X="35"
+						 Y="132"
+						 Width="95"
+						 Height="15"
+						 Text="PFX файл:"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPathEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="129"
+						 Width="200"
+						 Height="18"
+						 Property="EXISTING_PFX_PATH"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="157"
+						 Width="95"
+						 Height="15"
+						 Text="Пароль PFX:"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPasswordEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="154"
+						 Width="200"
+						 Height="18"
+						 Property="EXISTING_PFX_PASSWORD"
+						 Password="yes"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="SelfSignedNamesLabel"
+						 Type="Text"
+						 X="35"
+						 Y="132"
+						 Width="95"
+						 Height="25"
+						 Text="DNS/IP:"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedNamesEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="129"
+						 Width="200"
+						 Height="18"
+						 Property="SELF_SIGNED_DNS_NAMES"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="157"
+						 Width="95"
+						 Height="25"
+						 Text="Пароль PFX:"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedPasswordEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="154"
+						 Width="200"
+						 Height="18"
+						 Property="SELF_SIGNED_PFX_PASSWORD"
+						 Password="yes"
+						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="DataDirDlg" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+					<Publish Event="SpawnDialog"
+							 Value="InvalidExistingPfxPathDlg"
+							 Order="1"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PATH=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidExistingPfxPasswordDlg"
+							 Order="2"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidSelfSignedNamesDlg"
+							 Order="3"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_DNS_NAMES=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidSelfSignedPasswordDlg"
+							 Order="4"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_PFX_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="10"
+							 Condition="TRANSPORT_MODE=&quot;HTTP&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="11"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PATH&lt;&gt;&quot;&quot; AND EXISTING_PFX_PASSWORD&lt;&gt;&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="12"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_DNS_NAMES&lt;&gt;&quot;&quot; AND SELF_SIGNED_PFX_PASSWORD&lt;&gt;&quot;&quot;" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
 			<Dialog Id="ServiceAccountDlg"
 					Width="370"
 					Height="270"
@@ -186,11 +877,23 @@
 						 CheckBoxValue="1"
 						 Text="Установить файловый сервер как сервис" />
 
+				<Control Id="StartService"
+						 Type="CheckBox"
+						 X="35"
+						 Y="85"
+						 Width="300"
+						 Height="17"
+						 Property="START_SERVICE"
+						 CheckBoxValue="1"
+						 Text="Запустить сервис после установки"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
 				<Control Id="ServiceModeGroup"
 						 Type="RadioButtonGroup"
 						 X="35"
-						 Y="90"
-						 Width="310"
+						 Y="110"
+						 Width="180"
 						 Height="75"
 						 Property="SERVICE_ACCOUNT_MODE"
 						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
@@ -199,21 +902,21 @@
 						<RadioButton Value="SYSTEM"
 									 X="0"
 									 Y="0"
-									 Width="280"
+									 Width="170"
 									 Height="17"
 									 Text="Системная служба" />
 
 						<RadioButton Value="EXISTING"
 									 X="0"
-									 Y="25"
-									 Width="165"
+									 Y="22"
+									 Width="170"
 									 Height="17"
 									 Text="Существующий пользователь:" />
 
 						<RadioButton Value="CREATE"
 									 X="0"
-									 Y="50"
-									 Width="280"
+									 Y="44"
+									 Width="170"
 									 Height="17"
 									 Text="Создать пользователя FSC_USER" />
 					</RadioButtonGroup>
@@ -221,9 +924,9 @@
 
 				<Control Id="ExistingUserEdit"
 						 Type="Edit"
-						 X="210"
-						 Y="113"
-						 Width="125"
+						 X="215"
+						 Y="132"
+						 Width="120"
 						 Height="18"
 						 Property="SERVICE_EXISTING_USER"
 						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"EXISTING"'
@@ -293,7 +996,7 @@
 						 Width="56"
 						 Height="17"
 						 Text="!(loc.WixUIBack)">
-					<Publish Event="NewDialog" Value="InstallDirDlg" />
+					<Publish Event="NewDialog" Value="TransportDlg" />
 				</Control>
 
 				<Control Id="Next"
@@ -408,6 +1111,102 @@
 						 Width="230"
 						 Height="30"
 						 Text="Введите имя существующего пользователя." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidExistingPfxPathDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите путь к существующему PFX файлу." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidExistingPfxPasswordDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите пароль существующего PFX файла." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidSelfSignedNamesDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите DNS имена или IP адреса через запятую." />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="OK">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidSelfSignedPasswordDlg"
+					Width="260"
+					Height="85"
+					Title="FSC Storage Service">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="Введите пароль для создаваемого PFX файла." />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"

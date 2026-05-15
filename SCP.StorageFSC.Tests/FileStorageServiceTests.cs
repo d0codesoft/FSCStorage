@@ -28,6 +28,7 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task SaveFileAsync_StoresNewPhysicalFileAndCreatesTenantLink()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var bytes = Encoding.UTF8.GetBytes("hello from file storage");
 
@@ -38,7 +39,7 @@ public sealed class FileStorageServiceTests : IDisposable
             Category = "docs",
             ExternalKey = "doc-1",
             Content = new MemoryStream(bytes)
-        });
+        }, cancellationToken);
 
         Assert.True(result.Success);
         Assert.Equal(SaveFileStatus.Success, result.Status);
@@ -62,6 +63,7 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task SaveFileAsync_WhenContentAlreadyStored_ReusesStoredFileAndIncrementsReferenceCount()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var bytes = Encoding.UTF8.GetBytes("same bytes");
         var existing = new StoredFile
@@ -75,13 +77,13 @@ public sealed class FileStorageServiceTests : IDisposable
             ReferenceCount = 1,
             CreatedUtc = DateTime.UtcNow
         };
-        await _storedFiles.InsertAsync(existing);
+        await _storedFiles.InsertAsync(existing, cancellationToken);
 
         var result = await sut.SaveFileAsync(new SaveFileRequest
         {
             FileName = "copy.txt",
             Content = new MemoryStream(bytes)
-        });
+        }, cancellationToken);
 
         Assert.True(result.Success);
         Assert.Single(_storedFiles.Items);
@@ -94,13 +96,14 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task SaveFileAsync_WhenFileNameIsBlank_ReturnsValidationError()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
 
         var result = await sut.SaveFileAsync(new SaveFileRequest
         {
             FileName = " ",
             Content = new MemoryStream([1, 2, 3])
-        });
+        }, cancellationToken);
 
         Assert.False(result.Success);
         Assert.Equal(SaveFileStatus.ValidationError, result.Status);
@@ -112,33 +115,35 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task OpenReadAsync_WhenFileBelongsToCurrentTenant_ReturnsReadableContent()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var saveResult = await sut.SaveFileAsync(new SaveFileRequest
         {
             FileName = "open.txt",
             Content = new MemoryStream(Encoding.UTF8.GetBytes("read me"))
-        });
+        }, cancellationToken);
 
-        await using var opened = await sut.OpenReadAsync(saveResult.File!.FileGuid);
+        await using var opened = await sut.OpenReadAsync(saveResult.File!.FileGuid, cancellationToken);
 
         Assert.NotNull(opened);
         using var reader = new StreamReader(opened!.Content, Encoding.UTF8);
-        Assert.Equal("read me", await reader.ReadToEndAsync());
+        Assert.Equal("read me", await reader.ReadToEndAsync(cancellationToken));
     }
 
     [Fact]
     public async Task DeleteFileAsync_WhenLastReference_RemovesPhysicalFileAndStoredRow()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         var saveResult = await sut.SaveFileAsync(new SaveFileRequest
         {
             FileName = "delete.txt",
             Content = new MemoryStream(Encoding.UTF8.GetBytes("delete me"))
-        });
+        }, cancellationToken);
         var storedFile = Assert.Single(_storedFiles.Items);
         var fullPath = Path.Combine(_dataPath, storedFile.PhysicalPath);
 
-        var deleted = await sut.DeleteFileAsync(saveResult.File!.FileGuid);
+        var deleted = await sut.DeleteFileAsync(saveResult.File!.FileGuid, cancellationToken);
 
         Assert.True(deleted);
         Assert.Empty(_storedFiles.Items);
@@ -149,9 +154,10 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task GetFilesAsync_FiltersDeletedOrMissingStoredFiles()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
-        var visible = await InsertTenantFileAsync(storedFileDeleted: false);
-        await InsertTenantFileAsync(storedFileDeleted: true);
+        var visible = await InsertTenantFileAsync(storedFileDeleted: false, cancellationToken);
+        await InsertTenantFileAsync(storedFileDeleted: true, cancellationToken);
         _tenantFiles.Add(new TenantFile
         {
             Id = Guid.NewGuid(),
@@ -163,7 +169,7 @@ public sealed class FileStorageServiceTests : IDisposable
             CreatedUtc = DateTime.UtcNow
         });
 
-        var files = await sut.GetFilesAsync();
+        var files = await sut.GetFilesAsync(cancellationToken);
 
         var file = Assert.Single(files);
         Assert.Equal(visible.FileGuid, file.FileGuid);
@@ -172,15 +178,16 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task ServiceMethods_DemandExpectedTenantPermissions()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
 
         await sut.SaveFileAsync(new SaveFileRequest
         {
             FileName = "permissions.txt",
             Content = new MemoryStream(Encoding.UTF8.GetBytes("permissions"))
-        });
-        await sut.GetFilesAsync();
-        await sut.DeleteFileAsync(Guid.NewGuid());
+        }, cancellationToken);
+        await sut.GetFilesAsync(cancellationToken);
+        await sut.DeleteFileAsync(Guid.NewGuid(), cancellationToken);
 
         Assert.Contains(TenantPermission.Write, _authorization.DemandedPermissions);
         Assert.Contains(TenantPermission.Read, _authorization.DemandedPermissions);
@@ -190,10 +197,11 @@ public sealed class FileStorageServiceTests : IDisposable
     [Fact]
     public async Task DeleteOrphanFilesAsync_WhenCurrentTokenIsNotAdmin_ThrowsUnauthorizedAccessException()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var sut = CreateService();
         _currentTenant.Current!.IsAdmin = false;
 
-        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sut.DeleteOrphanFilesAsync());
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => sut.DeleteOrphanFilesAsync(cancellationToken));
     }
 
     public void Dispose()
@@ -211,16 +219,19 @@ public sealed class FileStorageServiceTests : IDisposable
             _storedFiles,
             _currentTenant,
             _authorization,
-            Options.Create(new FileStorageOptions
+            new ApplicationPaths()
             {
                 BasePath = _dataPath,
                 DataPath = _dataPath,
-                LogsPath = Path.Combine(_dataPath, "logs")
-            }),
+                LogsPath = Path.Combine(_dataPath, "logs"),
+                TempPath = Path.Combine(_dataPath, "temp")
+            },
             NullLogger<FileStorageService>.Instance);
     }
 
-    private async Task<TenantFile> InsertTenantFileAsync(bool storedFileDeleted)
+    private async Task<TenantFile> InsertTenantFileAsync(
+        bool storedFileDeleted,
+        CancellationToken cancellationToken)
     {
         var storedFile = new StoredFile
         {
@@ -233,7 +244,7 @@ public sealed class FileStorageServiceTests : IDisposable
             IsDeleted = storedFileDeleted,
             CreatedUtc = DateTime.UtcNow
         };
-        await _storedFiles.InsertAsync(storedFile);
+        await _storedFiles.InsertAsync(storedFile, cancellationToken);
 
         var tenantFile = new TenantFile
         {
@@ -244,7 +255,7 @@ public sealed class FileStorageServiceTests : IDisposable
             IsActive = true,
             CreatedUtc = DateTime.UtcNow
         };
-        await _tenantFiles.InsertAsync(tenantFile);
+        await _tenantFiles.InsertAsync(tenantFile, cancellationToken);
 
         return tenantFile;
     }

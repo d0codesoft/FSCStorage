@@ -16,7 +16,7 @@ namespace SCP.StorageFSC.Services
         private readonly IStoredFileRepository _storedFileRepository;
         private readonly ICurrentTenantAccessor _currentTenantAccessor;
         private readonly ITenantAuthorizationService _tenantAuthorizationService;
-        private readonly FileStorageOptions _options;
+        private readonly ApplicationPaths _options;
         private readonly ILogger<FileStorageService> _logger;
 
         public FileStorageService(
@@ -24,14 +24,14 @@ namespace SCP.StorageFSC.Services
             IStoredFileRepository storedFileRepository,
             ICurrentTenantAccessor currentTenantAccessor,
             ITenantAuthorizationService tenantAuthorizationService,
-            IOptions<FileStorageOptions> options,
+            ApplicationPaths options,
             ILogger<FileStorageService> logger)
         {
             _tenantFileRepository = tenantFileRepository;
             _storedFileRepository = storedFileRepository;
             _currentTenantAccessor = currentTenantAccessor;
             _tenantAuthorizationService = tenantAuthorizationService;
-            _options = options.Value;
+            _options = options;
             _logger = logger;
         }
 

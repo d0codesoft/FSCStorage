@@ -15,7 +15,7 @@ namespace scp.filestorage.Services
         private readonly IMultipartUploadPartRepository _partRepository;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
         private readonly ApplicationPaths _applicationPaths;
-        private readonly FileStorageMultipartOptions _options;
+        private readonly MultipartSettingOptions _options;
         private readonly ILogger<FileStorageMultipartService> _logger;
 
         public FileStorageMultipartService(
@@ -23,7 +23,7 @@ namespace scp.filestorage.Services
             IMultipartUploadPartRepository partRepository,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
             ApplicationPaths applicationPaths,
-            IOptions<FileStorageMultipartOptions> options,
+            IOptions<MultipartSettingOptions> options,
             ILogger<FileStorageMultipartService> logger)
         {
             _sessionRepository = sessionRepository;
@@ -485,7 +485,7 @@ namespace scp.filestorage.Services
         }
 
         private string BuildTempStoragePrefix(Guid tenantId, Guid uploadId) =>
-            Path.Combine(_applicationPaths.MultipartTempPath, tenantId.ToString("N"), uploadId.ToString("N"));
+            Path.Combine(_applicationPaths.TempPath, tenantId.ToString("N"), uploadId.ToString("N"));
 
         private string BuildPartStorageKey(MultipartUploadSession session, int partNumber) =>
             Path.Combine(session.TempStoragePrefix, $"part-{partNumber:D8}.bin");
@@ -535,7 +535,7 @@ namespace scp.filestorage.Services
 
         private string GetRootPath() => _applicationPaths.BasePath;
 
-        private string GetTempRootPath() => _applicationPaths.MultipartTempPath;
+        private string GetTempRootPath() => _applicationPaths.TempPath;
 
         private string GetFilesRootPath() => _applicationPaths.DataPath;
 

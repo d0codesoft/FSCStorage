@@ -34,7 +34,11 @@ The installer UI is localized in English and Ukrainian and uses the standard flo
 
 - welcome dialog with FSC Storage description and product artwork;
 - license agreement dialog using `assets\license.rtf`;
-- installation directory and confirmation dialogs.
+- installation directory selection;
+- data directory selection;
+- HTTP/HTTPS transport selection;
+- Windows service account selection;
+- confirmation dialog.
 
 ## Service Details
 
@@ -45,7 +49,17 @@ The installer UI is localized in English and Ukrainian and uses the standard flo
 - Startup type: automatic
 - Failure policy: restart on first and second failure
 
-The service uses `appsettings.Windows.json` from the published application, which stores data and logs under `C:\ProgramData\filestorage` by default.
+The MSI installs a single `appsettings.json`. During installation, it updates the
+Kestrel endpoint configuration according to the selected transport mode:
+
+- `HTTP only`
+- `HTTPS with existing PFX`
+- `Generate self-signed certificate`
+
+For production deployments, prefer DNS names and certificates issued by a trusted
+corporate CA or by Let's Encrypt. The generated self-signed option is intended for
+tests, isolated deployments, or environments where client machines can explicitly
+trust the generated certificate.
 
 ## Useful Commands
 

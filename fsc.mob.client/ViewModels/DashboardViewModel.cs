@@ -17,25 +17,25 @@ public sealed partial class DashboardViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private string _serverUrl = string.Empty;
+    public partial string ServerUrl { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _usedBytes = "-";
+    public partial string UsedBytes { get; set; } = "-";
 
     [ObservableProperty]
-    private string _storedFileCount = "-";
+    public partial string StoredFileCount { get; set; } = "-";
 
     [ObservableProperty]
-    private string _tenantFileCount = "-";
+    public partial string TenantFileCount { get; set; } = "-";
 
     [ObservableProperty]
-    private string _tenantCount = "-";
+    public partial string TenantCount { get; set; } = "-";
 
     [ObservableProperty]
-    private IReadOnlyList<LargestFileViewModel> _largestFiles = [];
+    public partial IReadOnlyList<LargestFileViewModel> LargestFiles { get; set; } = [];
 
     [ObservableProperty]
-    private IReadOnlyList<TenantStorageStatisticsViewModel> _tenantStatistics = [];
+    public partial IReadOnlyList<TenantStorageStatisticsViewModel> TenantStatistics { get; set; } = [];
 
     public async Task LoadAsync()
     {

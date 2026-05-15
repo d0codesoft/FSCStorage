@@ -13,6 +13,7 @@ public sealed class BackgroundTaskRepositoryTests
     [Fact]
     public async Task GetActiveAndCompletedAsync_QueryBackgroundTasks()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         DapperTypeHandlers.Register();
 
         var databasePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.db");
@@ -22,7 +23,7 @@ public sealed class BackgroundTaskRepositoryTests
         {
             await using (var connection = new SqliteConnection(connectionString))
             {
-                await connection.OpenAsync();
+                await connection.OpenAsync(cancellationToken);
                 await CreateSchemaAsync(connection);
 
                 await InsertTaskAsync(connection, BackgroundTaskStatus.Queued);
@@ -34,8 +35,8 @@ public sealed class BackgroundTaskRepositoryTests
 
             var repository = new BackgroundTaskRepository(new TestConnectionFactory(connectionString));
 
-            var active = await repository.GetActiveAsync();
-            var completed = await repository.GetCompletedAsync();
+            var active = await repository.GetActiveAsync(cancellationToken);
+            var completed = await repository.GetCompletedAsync(cancellationToken: cancellationToken);
 
             Assert.Equal(2, active.Count);
             Assert.All(active, task => Assert.True(
@@ -56,6 +57,7 @@ public sealed class BackgroundTaskRepositoryTests
     [Fact]
     public async Task MarkCanceledAsync_StoresCanceledTerminalState()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         DapperTypeHandlers.Register();
 
         var databasePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.db");
@@ -67,7 +69,7 @@ public sealed class BackgroundTaskRepositoryTests
         {
             await using (var connection = new SqliteConnection(connectionString))
             {
-                await connection.OpenAsync();
+                await connection.OpenAsync(cancellationToken);
                 await CreateSchemaAsync(connection);
                 await InsertTaskAsync(connection, BackgroundTaskStatus.Running, taskId);
             }
@@ -77,8 +79,9 @@ public sealed class BackgroundTaskRepositoryTests
             var updated = await repository.MarkCanceledAsync(
                 taskId,
                 canceledAtUtc,
-                "Application shutdown canceled the task.");
-            var task = await repository.GetByTaskIdAsync(taskId);
+                "Application shutdown canceled the task.",
+                cancellationToken);
+            var task = await repository.GetByTaskIdAsync(taskId, cancellationToken);
 
             Assert.True(updated);
             Assert.NotNull(task);

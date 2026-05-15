@@ -23,52 +23,52 @@ public sealed partial class TenantDetailsViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private string _pageTitle = "Create tenant";
+    public partial string PageTitle { get; set; } = "Create tenant";
 
     [ObservableProperty]
-    private string _name = string.Empty;
+    public partial string Name { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isActive = true;
+    public partial bool IsActive { get; set; } = true;
 
     [ObservableProperty]
-    private string _createdUtc = string.Empty;
+    public partial string CreatedUtc { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private IReadOnlyList<UserOption> _availableUsers = [];
+    public partial IReadOnlyList<UserOption> AvailableUsers { get; set; } = [];
 
     [ObservableProperty]
-    private UserOption? _selectedOwner;
+    public partial UserOption? SelectedOwner { get; set; }
 
     [ObservableProperty]
-    private IReadOnlyList<ApiTokenViewModel> _apiTokens = [];
+    public partial IReadOnlyList<ApiTokenViewModel> ApiTokens { get; set; } = [];
 
     [ObservableProperty]
-    private string _tokenName = string.Empty;
+    public partial string TokenName { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _tokenCanRead = true;
+    public partial bool TokenCanRead { get; set; } = true;
 
     [ObservableProperty]
-    private bool _tokenCanWrite;
+    public partial bool TokenCanWrite { get; set; }
 
     [ObservableProperty]
-    private bool _tokenCanDelete;
+    public partial bool TokenCanDelete { get; set; }
 
     [ObservableProperty]
-    private bool _tokenIsAdmin;
+    public partial bool TokenIsAdmin { get; set; }
 
     [ObservableProperty]
-    private bool _tokenIsActive = true;
+    public partial bool TokenIsActive { get; set; } = true;
 
     [ObservableProperty]
-    private string _tokenExpiresUtcText = string.Empty;
+    public partial string TokenExpiresUtcText { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private UserOption? _selectedTokenUser;
+    public partial UserOption? SelectedTokenUser { get; set; }
 
     [ObservableProperty]
-    private CreatedApiTokenViewModel? _generatedToken;
+    public partial CreatedApiTokenViewModel? GeneratedToken { get; set; }
 
     public bool IsExistingTenant => _tenantId.HasValue;
     public bool IsEditingToken => _editingTokenId.HasValue;

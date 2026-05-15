@@ -21,7 +21,7 @@
         <CollectionView Grid.Row="2" ItemsSource="{Binding Tenants}" SelectionMode="None">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="api:TenantViewModel">
-                    <Frame Padding="12" Margin="0,0,0,10">
+                    <Border Padding="12" Margin="0,0,0,10">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="{Binding Name}" FontAttributes="Bold" />
                             <Label Text="{Binding StatusLabel}" />
@@ -30,7 +30,7 @@
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:TenantsViewModel}}, Path=OpenTenantCommand}"
                                     CommandParameter="{Binding .}" />
                         </VerticalStackLayout>
-                    </Frame>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

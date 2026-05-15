@@ -10,6 +10,7 @@ public sealed class FileStorageCleanupBackgroundServiceTests
     [Fact]
     public async Task StopAsync_WhenWaitingForInterval_CompletesWithoutCanceledTask()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         await using var serviceProvider = new ServiceCollection().BuildServiceProvider();
         var options = new TestOptionsMonitor(new FileStorageCleanupOptions
         {
@@ -23,9 +24,9 @@ public sealed class FileStorageCleanupBackgroundServiceTests
             options,
             NullLogger<FileStorageCleanupBackgroundService>.Instance);
 
-        await service.StartAsync(CancellationToken.None);
-        await Task.Delay(50);
-        await service.StopAsync(CancellationToken.None);
+        await service.StartAsync(cancellationToken);
+        await Task.Delay(50, cancellationToken);
+        await service.StopAsync(cancellationToken);
 
         Assert.False(service.ExecuteTask?.IsFaulted);
         Assert.False(service.ExecuteTask?.IsCanceled);

@@ -33,14 +33,14 @@
             <Label Text="{Binding StatusMessage}" TextColor="Green" />
             <Label Text="{Binding ErrorMessage}" TextColor="Crimson" />
 
-            <Frame Padding="14" BackgroundColor="#FFF7E6" IsVisible="{Binding HasGeneratedToken}">
+            <Border Padding="14" BackgroundColor="#FFF7E6" IsVisible="{Binding HasGeneratedToken}">
                 <VerticalStackLayout Spacing="6">
                     <Label Text="Copy this generated API token now. It will not be shown again."
                            FontAttributes="Bold" />
                     <Label Text="{Binding GeneratedToken.Token}" LineBreakMode="CharacterWrap" />
                     <Button Text="Dismiss" Command="{Binding ClearGeneratedTokenCommand}" />
                 </VerticalStackLayout>
-            </Frame>
+            </Border>
 
             <Label Text="API key editor" FontSize="18" FontAttributes="Bold" IsVisible="{Binding IsExistingTenant}" />
             <VerticalStackLayout Spacing="8" IsVisible="{Binding IsExistingTenant}">
@@ -92,7 +92,7 @@
             <CollectionView ItemsSource="{Binding ApiTokens}" SelectionMode="None" IsVisible="{Binding IsExistingTenant}">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="api:ApiTokenViewModel">
-                        <Frame Padding="12" Margin="0,0,0,8">
+                        <Border Padding="12" Margin="0,0,0,8">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding Name}" FontAttributes="Bold" />
                                 <Label Text="{Binding TokenPrefix}" />
@@ -107,7 +107,7 @@
                                             CommandParameter="{Binding .}" />
                                 </HorizontalStackLayout>
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>

@@ -6,16 +6,16 @@ namespace fsc.mob.client.ViewModels;
 public abstract partial class ViewModelBase : ObservableObject
 {
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    private string? _statusMessage;
+    public partial string? StatusMessage { get; set; }
 
     [ObservableProperty]
-    private string? _errorMessage;
+    public partial string? ErrorMessage { get; set; }
 
     [ObservableProperty]
-    private bool _isUnauthorized;
+    public partial bool IsUnauthorized { get; set; }
 
     protected void ClearMessages()
     {

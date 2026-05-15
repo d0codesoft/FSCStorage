@@ -20,7 +20,7 @@ public sealed partial class UsersViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private IReadOnlyList<UserManagementViewModel> _users = [];
+    public partial IReadOnlyList<UserManagementViewModel> Users { get; set; } = [];
 
     public async Task LoadAsync()
     {

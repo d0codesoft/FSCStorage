@@ -12,6 +12,7 @@ public sealed class StorageStatisticsRepositoryTests
     [Fact]
     public async Task GetAsync_ReturnsStorageTenantAndLargestFileStatistics()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         DapperTypeHandlers.Register();
 
         var databasePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.db");
@@ -23,7 +24,7 @@ public sealed class StorageStatisticsRepositoryTests
         {
             await using (var connection = new SqliteConnection(connectionString))
             {
-                await connection.OpenAsync();
+                await connection.OpenAsync(cancellationToken);
                 await CreateSchemaAsync(connection);
 
                 var tenantAGuid = Guid.NewGuid();
@@ -93,7 +94,7 @@ public sealed class StorageStatisticsRepositoryTests
 
             var repository = new StorageStatisticsRepository(new TestConnectionFactory(connectionString));
 
-            var result = await repository.GetAsync(largestFilesLimit: 10);
+            var result = await repository.GetAsync(largestFilesLimit: 10, cancellationToken);
 
             Assert.Equal(350, result.UsedBytes);
             Assert.Equal(2, result.StoredFileCount);

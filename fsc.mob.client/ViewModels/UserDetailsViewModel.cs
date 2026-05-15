@@ -21,34 +21,34 @@ public sealed partial class UserDetailsViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private string _pageTitle = "Create user";
+    public partial string PageTitle { get; set; } = "Create user";
 
     [ObservableProperty]
-    private string _name = string.Empty;
+    public partial string Name { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _email = string.Empty;
+    public partial string Email { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _password = string.Empty;
+    public partial string Password { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _isActive = true;
+    public partial bool IsActive { get; set; } = true;
 
     [ObservableProperty]
-    private bool _isAdmin;
+    public partial bool IsAdmin { get; set; }
 
     [ObservableProperty]
-    private bool _isLocked;
+    public partial bool IsLocked { get; set; }
 
     [ObservableProperty]
-    private string _createdUtc = string.Empty;
+    public partial string CreatedUtc { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private IReadOnlyList<TenantViewModel> _tenants = [];
+    public partial IReadOnlyList<TenantViewModel> Tenants { get; set; } = [];
 
     [ObservableProperty]
-    private IReadOnlyList<UserTokenGroup> _tokenGroups = [];
+    public partial IReadOnlyList<UserTokenGroup> TokenGroups { get; set; } = [];
 
     public bool IsExistingUser => _userId.HasValue;
     public string BlockActionLabel => IsLocked ? "Unblock user" : "Block user";

@@ -8,18 +8,18 @@ namespace SCP.StorageFSC.Services
     {
         private readonly IDeletedTenantRepository _deletedTenantRepository;
         private readonly IStoredFileRepository _storedFileRepository;
-        private readonly FileStorageOptions _options;
+        private readonly ApplicationPaths _options;
         private readonly ILogger<DeletedTenantCleanupService> _logger;
 
         public DeletedTenantCleanupService(
             IDeletedTenantRepository deletedTenantRepository,
             IStoredFileRepository storedFileRepository,
-            IOptions<FileStorageOptions> options,
+            ApplicationPaths options,
             ILogger<DeletedTenantCleanupService> logger)
         {
             _deletedTenantRepository = deletedTenantRepository;
             _storedFileRepository = storedFileRepository;
-            _options = options.Value;
+            _options = options;
             _logger = logger;
         }
 

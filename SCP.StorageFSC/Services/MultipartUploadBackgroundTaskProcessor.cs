@@ -229,7 +229,7 @@ namespace scp.filestorage.Services
 
         private string GetRootPath() => _applicationPaths.BasePath;
 
-        private string GetTempRootPath() => _applicationPaths.MultipartTempPath;
+        private string GetTempRootPath() => _applicationPaths.TempPath;
 
         private string GetFilesRootPath() => _applicationPaths.DataPath;
 

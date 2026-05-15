@@ -23,13 +23,13 @@
             <CollectionView ItemsSource="{Binding ActiveTasks}" SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="api:BackgroundTaskViewModel">
-                        <Frame Padding="12" Margin="0,0,0,8">
+                        <Border Padding="12" Margin="0,0,0,8">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding TypeName}" FontAttributes="Bold" />
                                 <Label Text="{Binding StatusSummary}" />
                                 <Label Text="{Binding TimelineLabel}" FontSize="12" />
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
@@ -38,13 +38,13 @@
             <CollectionView ItemsSource="{Binding CompletedTasks}" SelectionMode="None">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="api:BackgroundTaskViewModel">
-                        <Frame Padding="12" Margin="0,0,0,8">
+                        <Border Padding="12" Margin="0,0,0,8">
                             <VerticalStackLayout Spacing="4">
                                 <Label Text="{Binding TypeName}" FontAttributes="Bold" />
                                 <Label Text="{Binding StatusSummary}" />
                                 <Label Text="{Binding TimelineLabel}" FontSize="12" />
                             </VerticalStackLayout>
-                        </Frame>
+                        </Border>
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>

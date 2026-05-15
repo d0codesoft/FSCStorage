@@ -20,7 +20,7 @@ public sealed partial class TenantsViewModel : ViewModelBase
     }
 
     [ObservableProperty]
-    private IReadOnlyList<TenantViewModel> _tenants = [];
+    public partial IReadOnlyList<TenantViewModel> Tenants { get; set; } = [];
 
     public async Task LoadAsync()
     {

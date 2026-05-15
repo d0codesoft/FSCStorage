@@ -21,7 +21,7 @@
         <CollectionView Grid.Row="2" ItemsSource="{Binding Users}" SelectionMode="None">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="api:UserManagementViewModel">
-                    <Frame Padding="12" Margin="0,0,0,10">
+                    <Border Padding="12" Margin="0,0,0,10">
                         <VerticalStackLayout Spacing="6">
                             <Label Text="{Binding UserName}" FontAttributes="Bold" />
                             <Label Text="{Binding Email}" />
@@ -33,7 +33,7 @@
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type viewModels:UsersViewModel}}, Path=OpenUserCommand}"
                                     CommandParameter="{Binding .}" />
                         </VerticalStackLayout>
-                    </Frame>
+                    </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

@@ -369,7 +369,7 @@ else if (tenant is not null)
             {
                 createdToken = await ApiClient.CreateApiTokenAsync(new CreateApiTokenRequestModel
                 {
-                    UserId = tenant.UserId,
+                    UserId = tenant?.UserId ?? throw new InvalidOperationException("Tenant user ID is required to create API token."),
                     TenantId = TenantId,
                     Name = tokenEditor.Name,
                     CanRead = tokenEditor.CanRead,

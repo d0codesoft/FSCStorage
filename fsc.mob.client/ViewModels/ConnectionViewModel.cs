@@ -45,31 +45,31 @@ public sealed partial class ConnectionViewModel : ViewModelBase
     public IReadOnlyList<AuthModeOption> AuthModes { get; }
 
     [ObservableProperty]
-    private AuthModeOption _selectedAuthMode;
+    public partial AuthModeOption SelectedAuthMode { get; set; } = null!;
 
     [ObservableProperty]
-    private string _serverUrl;
+    public partial string ServerUrl { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _apiToken = string.Empty;
+    public partial string ApiToken { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _login = string.Empty;
+    public partial string Login { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _password = string.Empty;
+    public partial string Password { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _twoFactorCode = string.Empty;
+    public partial string TwoFactorCode { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _twoFactorHint = string.Empty;
+    public partial string TwoFactorHint { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private bool _rememberApiToken;
+    public partial bool RememberApiToken { get; set; }
 
     [ObservableProperty]
-    private bool _rememberServerUrl;
+    public partial bool RememberServerUrl { get; set; }
 
     public bool IsApiTokenMode => SelectedAuthMode.Mode == AuthMode.ApiToken;
     public bool IsCredentialMode => SelectedAuthMode.Mode == AuthMode.AdminCredentials;
