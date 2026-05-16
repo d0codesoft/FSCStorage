@@ -2,16 +2,16 @@
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 	<Package
-	  Name="FSC Storage Service"
+	  Name="!(loc.ProductName)"
 	  Manufacturer="SCP"
 	  Version="$(var.ProductVersion)"
 	  UpgradeCode="{2F26E8C4-7D37-48F8-9635-45683C7D53E5}"
 	  Codepage="65001"
 	  Scope="perMachine">
 
-		<MajorUpgrade DowngradeErrorMessage="A newer version of FSC Storage Service is already installed." />
+		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeErrorMessage)" />
 		<MediaTemplate EmbedCab="yes" />
-		<Launch Condition="Privileged" Message="Для установки FSC Storage Service требуются права администратора." />
+		<Launch Condition="Privileged" Message="!(loc.AdminPrivilegesRequiredMessage)" />
 
 		<!--
         Standard WixUI_InstallDir UI.
@@ -71,7 +71,7 @@
 			<Directory Id="DATAFOLDER" Name="FSCStorage" />
 		</StandardDirectory>
 
-		<Feature Id="MainFeature" Title="FSC Storage Service" Level="1">
+		<Feature Id="MainFeature" Title="!(loc.ProductName)" Level="1">
 			<ComponentRef Id="DataFolderComponent" />
 			<ComponentRef Id="InstallFolderRegistryComponent" />
 			<ComponentRef Id="AppSettingsComponent" />
@@ -151,8 +151,8 @@
 			  Id="FscStorageServiceInstall"
 			  Type="ownProcess"
 			  Name="fsc-storage"
-			  DisplayName="FSC Storage Service"
-			  Description="Simple File Storage Service"
+			  DisplayName="!(loc.ProductName)"
+			  Description="!(loc.ServiceDescription)"
 			  Start="auto"
 			  ErrorControl="normal"
 			  Account="[SERVICEACCOUNT]"
@@ -318,7 +318,7 @@
 			<Dialog Id="UpgradeDetectedDlg"
 					Width="370"
 					Height="270"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 
 				<Control Id="BannerBitmap"
 						 Type="Bitmap"
@@ -337,7 +337,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Обновление FSC Storage Service" />
+						 Text="!(loc.UpgradeDetectedDlgTitle)" />
 
 				<Control Id="Description"
 						 Type="Text"
@@ -347,7 +347,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Обнаружена установленная версия. Будет выполнено обновление." />
+						 Text="!(loc.UpgradeDetectedDlgDescription)" />
 
 				<Control Id="Line"
 						 Type="Line"
@@ -362,7 +362,7 @@
 						 Y="75"
 						 Width="320"
 						 Height="80"
-						 Text="Параметры хранения данных, HTTP/HTTPS и учетной записи службы не будут запрошены повторно. Существующий appsettings.json будет сохранен." />
+						 Text="!(loc.UpgradeDetectedDlgBody)" />
 
 				<Control Id="Back"
 						 Type="PushButton"
@@ -396,7 +396,7 @@
 			<Dialog Id="FscMaintenanceTypeDlg"
 					Width="370"
 					Height="270"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 
 				<Control Id="BannerBitmap"
 						 Type="Bitmap"
@@ -415,7 +415,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Обслуживание FSC Storage Service" />
+						 Text="!(loc.MaintenanceTypeDlgTitle)" />
 
 				<Control Id="Description"
 						 Type="Text"
@@ -425,7 +425,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Выберите действие для установленного приложения." />
+						 Text="!(loc.MaintenanceTypeDlgDescription)" />
 
 				<Control Id="Line"
 						 Type="Line"
@@ -440,7 +440,7 @@
 						 Y="72"
 						 Width="130"
 						 Height="20"
-						 Text="Восстановить" />
+						 Text="!(loc.MaintenanceTypeDlgRepairButton)" />
 
 				<Control Id="RepairText"
 						 Type="Text"
@@ -448,7 +448,7 @@
 						 Y="73"
 						 Width="160"
 						 Height="28"
-						 Text="Переустановить файлы и восстановить компоненты." />
+						 Text="!(loc.MaintenanceTypeDlgRepairText)" />
 
 				<Control Id="ChangeConfigButton"
 						 Type="PushButton"
@@ -456,7 +456,7 @@
 						 Y="112"
 						 Width="130"
 						 Height="20"
-						 Text="Изменить настройки" />
+						 Text="!(loc.MaintenanceTypeDlgChangeConfigButton)" />
 
 				<Control Id="ChangeConfigText"
 						 Type="Text"
@@ -464,7 +464,7 @@
 						 Y="113"
 						 Width="160"
 						 Height="40"
-						 Text="Изменить директорию данных, HTTP/HTTPS и параметры службы." />
+						 Text="!(loc.MaintenanceTypeDlgChangeConfigText)" />
 
 				<Control Id="RemoveButton"
 						 Type="PushButton"
@@ -472,7 +472,7 @@
 						 Y="164"
 						 Width="130"
 						 Height="20"
-						 Text="Удалить" />
+						 Text="!(loc.MaintenanceTypeDlgRemoveButton)" />
 
 				<Control Id="RemoveText"
 						 Type="Text"
@@ -480,7 +480,7 @@
 						 Y="165"
 						 Width="160"
 						 Height="28"
-						 Text="Удалить FSC Storage Service с этого компьютера." />
+						 Text="!(loc.MaintenanceTypeDlgRemoveText)" />
 
 				<Control Id="Back"
 						 Type="PushButton"
@@ -505,7 +505,7 @@
 			<Dialog Id="DataDirDlg"
 					Width="370"
 					Height="270"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 
 				<Control Id="BannerBitmap"
 						 Type="Bitmap"
@@ -524,7 +524,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Хранилище данных FSC Storage" />
+						 Text="!(loc.DataDirDlgTitle)" />
 
 				<Control Id="Description"
 						 Type="Text"
@@ -534,7 +534,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Выберите директорию для базы данных, файлов и журналов." />
+						 Text="!(loc.DataDirDlgDescription)" />
 
 				<Control Id="Line"
 						 Type="Line"
@@ -549,7 +549,7 @@
 						 Y="72"
 						 Width="320"
 						 Height="30"
-						 Text="Директория хранения данных:" />
+						 Text="!(loc.DataDirDlgDataFolderLabel)" />
 
 				<Control Id="DataFolderEdit"
 						 Type="PathEdit"
@@ -565,7 +565,7 @@
 						 Y="110"
 						 Width="56"
 						 Height="18"
-						 Text="Обзор...">
+						 Text="!(loc.DataDirDlgBrowseButton)">
 					<Publish Property="_BrowseProperty" Value="DATAFOLDER" Order="1" />
 					<Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
 				</Control>
@@ -609,7 +609,7 @@
 			<Dialog Id="TransportDlg"
 					Width="370"
 					Height="270"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 
 				<Control Id="BannerBitmap"
 						 Type="Bitmap"
@@ -628,7 +628,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Настройка HTTP/HTTPS" />
+						 Text="!(loc.TransportDlgTitle)" />
 
 				<Control Id="Description"
 						 Type="Text"
@@ -638,7 +638,7 @@
 						 Height="10"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Выберите, как сервис будет принимать подключения." />
+						 Text="!(loc.TransportDlgDescription)" />
 
 				<Control Id="Line"
 						 Type="Line"
@@ -660,21 +660,21 @@
 									 Y="0"
 									 Width="260"
 									 Height="17"
-									 Text="HTTP only" />
+									 Text="!(loc.TransportModeHttpOnly)" />
 
 						<RadioButton Value="EXISTING_PFX"
 									 X="0"
 									 Y="22"
 									 Width="260"
 									 Height="17"
-									 Text="HTTPS with existing PFX" />
+									 Text="!(loc.TransportModeExistingPfx)" />
 
 						<RadioButton Value="SELF_SIGNED"
 									 X="0"
 									 Y="44"
 									 Width="260"
 									 Height="17"
-									 Text="Generate self-signed certificate" />
+									 Text="!(loc.TransportModeSelfSigned)" />
 					</RadioButtonGroup>
 				</Control>
 
@@ -684,7 +684,7 @@
 						 Y="132"
 						 Width="95"
 						 Height="15"
-						 Text="PFX файл:"
+						 Text="!(loc.TransportDlgExistingPfxPathLabel)"
 						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
 						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
 
@@ -704,7 +704,7 @@
 						 Y="157"
 						 Width="95"
 						 Height="15"
-						 Text="Пароль PFX:"
+						 Text="!(loc.TransportDlgExistingPfxPasswordLabel)"
 						 DisableCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
 						 EnableCondition='TRANSPORT_MODE="EXISTING_PFX"' />
 
@@ -725,7 +725,7 @@
 						 Y="132"
 						 Width="95"
 						 Height="25"
-						 Text="DNS/IP:"
+						 Text="!(loc.TransportDlgSelfSignedNamesLabel)"
 						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
 						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
 
@@ -745,7 +745,7 @@
 						 Y="157"
 						 Width="95"
 						 Height="25"
-						 Text="Пароль PFX:"
+						 Text="!(loc.TransportDlgSelfSignedPasswordLabel)"
 						 DisableCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
 						 EnableCondition='TRANSPORT_MODE="SELF_SIGNED"' />
 
@@ -829,7 +829,7 @@
 			<Dialog Id="ServiceAccountDlg"
 					Width="370"
 					Height="270"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 
 				<Control Id="BannerBitmap"
 						 Type="Bitmap"
@@ -848,7 +848,7 @@
 						 Height="15"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Установка файлового сервера FSC Storage" />
+						 Text="!(loc.ServiceAccountDlgTitle)" />
 
 				<Control Id="Description"
 						 Type="Text"
@@ -858,7 +858,7 @@
 						 Height="15"
 						 Transparent="yes"
 						 NoPrefix="yes"
-						 Text="Установите файловый сервер FSC Storage как сервис Windows." />
+						 Text="!(loc.ServiceAccountDlgDescription)" />
 
 				<Control Id="Line"
 						 Type="Line"
@@ -875,7 +875,7 @@
 						 Height="17"
 						 Property="INSTALL_AS_SERVICE"
 						 CheckBoxValue="1"
-						 Text="Установить файловый сервер как сервис" />
+						 Text="!(loc.ServiceAccountDlgInstallAsService)" />
 
 				<Control Id="StartService"
 						 Type="CheckBox"
@@ -885,7 +885,7 @@
 						 Height="17"
 						 Property="START_SERVICE"
 						 CheckBoxValue="1"
-						 Text="Запустить сервис после установки"
+						 Text="!(loc.ServiceAccountDlgStartService)"
 						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
 						 EnableCondition='INSTALL_AS_SERVICE="1"' />
 
@@ -904,21 +904,21 @@
 									 Y="0"
 									 Width="170"
 									 Height="17"
-									 Text="Системная служба" />
+									 Text="!(loc.ServiceAccountModeSystem)" />
 
 						<RadioButton Value="EXISTING"
 									 X="0"
 									 Y="22"
 									 Width="170"
 									 Height="17"
-									 Text="Существующий пользователь:" />
+									 Text="!(loc.ServiceAccountModeExisting)" />
 
 						<RadioButton Value="CREATE"
 									 X="0"
 									 Y="44"
 									 Width="170"
 									 Height="17"
-									 Text="Создать пользователя FSC_USER" />
+									 Text="!(loc.ServiceAccountModeCreate)" />
 					</RadioButtonGroup>
 				</Control>
 
@@ -938,7 +938,7 @@
 						 Y="180"
 						 Width="110"
 						 Height="15"
-						 Text="Пароль:"
+						 Text="!(loc.ServiceAccountDlgPasswordLabel)"
 						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE="SYSTEM"'
 						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE&lt;&gt;"SYSTEM"' />
 
@@ -974,7 +974,7 @@
 						 Y="207"
 						 Width="110"
 						 Height="15"
-						 Text="Подтвердите пароль:"
+						 Text="!(loc.ServiceAccountDlgConfirmPasswordLabel)"
 						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
 						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"' />
 
@@ -1103,14 +1103,14 @@
 			<Dialog Id="InvalidServiceAccountDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите имя существующего пользователя." />
+						 Text="!(loc.InvalidServiceAccountDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1119,7 +1119,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1127,14 +1127,14 @@
 			<Dialog Id="InvalidExistingPfxPathDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите путь к существующему PFX файлу." />
+						 Text="!(loc.InvalidExistingPfxPathDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1143,7 +1143,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1151,14 +1151,14 @@
 			<Dialog Id="InvalidExistingPfxPasswordDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите пароль существующего PFX файла." />
+						 Text="!(loc.InvalidExistingPfxPasswordDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1167,7 +1167,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1175,14 +1175,14 @@
 			<Dialog Id="InvalidSelfSignedNamesDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите DNS имена или IP адреса через запятую." />
+						 Text="!(loc.InvalidSelfSignedNamesDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1191,7 +1191,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1199,14 +1199,14 @@
 			<Dialog Id="InvalidSelfSignedPasswordDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите пароль для создаваемого PFX файла." />
+						 Text="!(loc.InvalidSelfSignedPasswordDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1215,7 +1215,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1223,14 +1223,14 @@
 			<Dialog Id="InvalidServicePasswordDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Введите пароль пользователя." />
+						 Text="!(loc.InvalidServicePasswordDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1239,7 +1239,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>
@@ -1247,14 +1247,14 @@
 			<Dialog Id="InvalidServicePasswordConfirmDlg"
 					Width="260"
 					Height="85"
-					Title="FSC Storage Service">
+					Title="!(loc.ProductName)">
 				<Control Id="Text"
 						 Type="Text"
 						 X="15"
 						 Y="15"
 						 Width="230"
 						 Height="30"
-						 Text="Пароль и подтверждение пароля не совпадают." />
+						 Text="!(loc.InvalidServicePasswordConfirmDlgText)" />
 				<Control Id="Ok"
 						 Type="PushButton"
 						 X="102"
@@ -1263,7 +1263,7 @@
 						 Height="17"
 						 Default="yes"
 						 Cancel="yes"
-						 Text="OK">
+						 Text="!(loc.OkButton)">
 					<Publish Event="EndDialog" Value="Return" />
 				</Control>
 			</Dialog>

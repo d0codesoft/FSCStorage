@@ -1,6 +1,51 @@
 <WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="uk-UA">
+  <String Id="ProductName" Value="FSC Storage Service" />
+  <String Id="DowngradeErrorMessage" Value="Новішу версію FSC Storage Service уже встановлено." />
+  <String Id="AdminPrivilegesRequiredMessage" Value="Для встановлення FSC Storage Service потрібні права адміністратора." />
+  <String Id="ServiceDescription" Value="Простий сервіс файлового сховища" />
   <String Id="WelcomeDlgDescription" Value="Цей майстер інсталює FSC Storage Service: файлове сховище з HTTP API, фоновими завданнями обслуговування та адміністративною CLI-утилітою. Натисніть Далі, щоб продовжити інсталяцію." />
   <String Id="LicenseAgreementDlgDescription" Value="Перед інсталяцією FSC Storage Service уважно прочитайте умови ліцензійної угоди." />
+  <String Id="UpgradeDetectedDlgTitle" Value="Оновлення FSC Storage Service" />
+  <String Id="UpgradeDetectedDlgDescription" Value="Виявлено встановлену версію. Буде виконано оновлення." />
+  <String Id="UpgradeDetectedDlgBody" Value="Параметри зберігання даних, HTTP/HTTPS і облікового запису служби не запитуватимуться повторно. Наявний appsettings.json буде збережено." />
+  <String Id="MaintenanceTypeDlgTitle" Value="Обслуговування FSC Storage Service" />
+  <String Id="MaintenanceTypeDlgDescription" Value="Виберіть дію для встановленої програми." />
+  <String Id="MaintenanceTypeDlgRepairButton" Value="Відновити" />
+  <String Id="MaintenanceTypeDlgRepairText" Value="Перевстановити файли та відновити компоненти." />
+  <String Id="MaintenanceTypeDlgChangeConfigButton" Value="Змінити налаштування" />
+  <String Id="MaintenanceTypeDlgChangeConfigText" Value="Змінити каталог даних, HTTP/HTTPS і параметри служби." />
+  <String Id="MaintenanceTypeDlgRemoveButton" Value="Видалити" />
+  <String Id="MaintenanceTypeDlgRemoveText" Value="Видалити FSC Storage Service з цього комп'ютера." />
+  <String Id="DataDirDlgTitle" Value="Сховище даних FSC Storage" />
+  <String Id="DataDirDlgDescription" Value="Виберіть каталог для бази даних, файлів і журналів." />
+  <String Id="DataDirDlgDataFolderLabel" Value="Каталог зберігання даних:" />
+  <String Id="DataDirDlgBrowseButton" Value="Огляд..." />
+  <String Id="TransportDlgTitle" Value="Налаштування HTTP/HTTPS" />
+  <String Id="TransportDlgDescription" Value="Виберіть, як сервіс прийматиме підключення." />
+  <String Id="TransportModeHttpOnly" Value="Лише HTTP" />
+  <String Id="TransportModeExistingPfx" Value="HTTPS з наявним PFX" />
+  <String Id="TransportModeSelfSigned" Value="Створити самопідписаний сертифікат" />
+  <String Id="TransportDlgExistingPfxPathLabel" Value="Файл PFX:" />
+  <String Id="TransportDlgExistingPfxPasswordLabel" Value="Пароль PFX:" />
+  <String Id="TransportDlgSelfSignedNamesLabel" Value="DNS/IP:" />
+  <String Id="TransportDlgSelfSignedPasswordLabel" Value="Пароль PFX:" />
+  <String Id="ServiceAccountDlgTitle" Value="Встановлення файлового сервера FSC Storage" />
+  <String Id="ServiceAccountDlgDescription" Value="Встановіть файловий сервер FSC Storage як службу Windows." />
+  <String Id="ServiceAccountDlgInstallAsService" Value="Встановити файловий сервер як службу" />
+  <String Id="ServiceAccountDlgStartService" Value="Запустити службу після встановлення" />
+  <String Id="ServiceAccountModeSystem" Value="Системна служба" />
+  <String Id="ServiceAccountModeExisting" Value="Наявний користувач:" />
+  <String Id="ServiceAccountModeCreate" Value="Створити користувача FSC_USER" />
+  <String Id="ServiceAccountDlgPasswordLabel" Value="Пароль:" />
+  <String Id="ServiceAccountDlgConfirmPasswordLabel" Value="Підтвердьте пароль:" />
+  <String Id="InvalidServiceAccountDlgText" Value="Введіть ім'я наявного користувача." />
+  <String Id="InvalidExistingPfxPathDlgText" Value="Введіть шлях до наявного PFX-файлу." />
+  <String Id="InvalidExistingPfxPasswordDlgText" Value="Введіть пароль наявного PFX-файлу." />
+  <String Id="InvalidSelfSignedNamesDlgText" Value="Введіть DNS-імена або IP-адреси через кому." />
+  <String Id="InvalidSelfSignedPasswordDlgText" Value="Введіть пароль для створюваного PFX-файлу." />
+  <String Id="InvalidServicePasswordDlgText" Value="Введіть пароль користувача." />
+  <String Id="InvalidServicePasswordConfirmDlgText" Value="Пароль і підтвердження пароля не збігаються." />
+  <String Id="OkButton" Value="OK" />
   <String Id="msierrUSRFailedUserCreate" Value="Не вдалося створити користувача. ([2] [3] [4] [5])" />
   <String Id="msierrUSRFailedUserCreatePswd" Value="Не вдалося створити користувача через недійсний пароль. ([2] [3] [4] [5])" />
   <String Id="msierrUSRFailedUserGroupAdd" Value="Не вдалося додати користувача до групи. ([2] [3] [4] [5])" />

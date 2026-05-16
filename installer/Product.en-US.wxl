@@ -1,4 +1,49 @@
 <WixLocalization xmlns="http://wixtoolset.org/schemas/v4/wxl" Culture="en-US">
+  <String Id="ProductName" Value="FSC Storage Service" />
+  <String Id="DowngradeErrorMessage" Value="A newer version of FSC Storage Service is already installed." />
+  <String Id="AdminPrivilegesRequiredMessage" Value="Administrator privileges are required to install FSC Storage Service." />
+  <String Id="ServiceDescription" Value="Simple File Storage Service" />
   <String Id="WelcomeDlgDescription" Value="This wizard will install FSC Storage Service: file storage with an HTTP API, background maintenance tasks, and an administrative CLI utility. Click Next to continue the installation." />
   <String Id="LicenseAgreementDlgDescription" Value="Please read the license agreement carefully before installing FSC Storage Service." />
+  <String Id="UpgradeDetectedDlgTitle" Value="Upgrade FSC Storage Service" />
+  <String Id="UpgradeDetectedDlgDescription" Value="An installed version was detected. The installer will perform an upgrade." />
+  <String Id="UpgradeDetectedDlgBody" Value="Data storage, HTTP/HTTPS, and service account settings will not be requested again. The existing appsettings.json will be preserved." />
+  <String Id="MaintenanceTypeDlgTitle" Value="Maintain FSC Storage Service" />
+  <String Id="MaintenanceTypeDlgDescription" Value="Choose an action for the installed application." />
+  <String Id="MaintenanceTypeDlgRepairButton" Value="Repair" />
+  <String Id="MaintenanceTypeDlgRepairText" Value="Reinstall files and restore components." />
+  <String Id="MaintenanceTypeDlgChangeConfigButton" Value="Change settings" />
+  <String Id="MaintenanceTypeDlgChangeConfigText" Value="Change the data directory, HTTP/HTTPS, and service settings." />
+  <String Id="MaintenanceTypeDlgRemoveButton" Value="Remove" />
+  <String Id="MaintenanceTypeDlgRemoveText" Value="Remove FSC Storage Service from this computer." />
+  <String Id="DataDirDlgTitle" Value="FSC Storage Data Storage" />
+  <String Id="DataDirDlgDescription" Value="Choose the directory for the database, files, and logs." />
+  <String Id="DataDirDlgDataFolderLabel" Value="Data storage directory:" />
+  <String Id="DataDirDlgBrowseButton" Value="Browse..." />
+  <String Id="TransportDlgTitle" Value="Configure HTTP/HTTPS" />
+  <String Id="TransportDlgDescription" Value="Choose how the service will accept connections." />
+  <String Id="TransportModeHttpOnly" Value="HTTP only" />
+  <String Id="TransportModeExistingPfx" Value="HTTPS with existing PFX" />
+  <String Id="TransportModeSelfSigned" Value="Generate self-signed certificate" />
+  <String Id="TransportDlgExistingPfxPathLabel" Value="PFX file:" />
+  <String Id="TransportDlgExistingPfxPasswordLabel" Value="PFX password:" />
+  <String Id="TransportDlgSelfSignedNamesLabel" Value="DNS/IP:" />
+  <String Id="TransportDlgSelfSignedPasswordLabel" Value="PFX password:" />
+  <String Id="ServiceAccountDlgTitle" Value="Install FSC Storage file server" />
+  <String Id="ServiceAccountDlgDescription" Value="Install the FSC Storage file server as a Windows service." />
+  <String Id="ServiceAccountDlgInstallAsService" Value="Install the file server as a service" />
+  <String Id="ServiceAccountDlgStartService" Value="Start the service after installation" />
+  <String Id="ServiceAccountModeSystem" Value="System service" />
+  <String Id="ServiceAccountModeExisting" Value="Existing user:" />
+  <String Id="ServiceAccountModeCreate" Value="Create FSC_USER user" />
+  <String Id="ServiceAccountDlgPasswordLabel" Value="Password:" />
+  <String Id="ServiceAccountDlgConfirmPasswordLabel" Value="Confirm password:" />
+  <String Id="InvalidServiceAccountDlgText" Value="Enter the name of an existing user." />
+  <String Id="InvalidExistingPfxPathDlgText" Value="Enter the path to an existing PFX file." />
+  <String Id="InvalidExistingPfxPasswordDlgText" Value="Enter the password for the existing PFX file." />
+  <String Id="InvalidSelfSignedNamesDlgText" Value="Enter DNS names or IP addresses separated by commas." />
+  <String Id="InvalidSelfSignedPasswordDlgText" Value="Enter a password for the generated PFX file." />
+  <String Id="InvalidServicePasswordDlgText" Value="Enter the user password." />
+  <String Id="InvalidServicePasswordConfirmDlgText" Value="Password and password confirmation do not match." />
+  <String Id="OkButton" Value="OK" />
 </WixLocalization>
