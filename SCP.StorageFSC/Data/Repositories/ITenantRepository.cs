@@ -12,6 +12,8 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<Tenant?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<bool> UpdateAsync(Tenant tenant, CancellationToken cancellationToken = default);
+        Task<bool> RecalculateTotalSizeBytesAsync(Guid tenantId, CancellationToken cancellationToken = default);
+        Task<int> RecalculateAllTotalSizeBytesAsync(CancellationToken cancellationToken = default);
         Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
     }
 }

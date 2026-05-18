@@ -61,6 +61,10 @@
             <dd>@selectedTask.TypeName</dd>
             <dt>Status</dt>
             <dd>@selectedTask.StatusName</dd>
+            <dt>Description</dt>
+            <dd>@selectedTask.Descr</dd>
+            <dt>Tenant ID</dt>
+            <dd>@(selectedTask.TenantId?.ToString() ?? "-")</dd>
             <dt>Queued UTC</dt>
             <dd>@FormatUtc(selectedTask.QueuedAtUtc)</dd>
             <dt>Started UTC</dt>
@@ -69,8 +73,8 @@
             <dd>@FormatUtc(selectedTask.CompletedAtUtc)</dd>
             <dt>Failed UTC</dt>
             <dd>@FormatUtc(selectedTask.FailedAtUtc)</dd>
-            <dt>Upload ID</dt>
-            <dd>@(selectedTask.UploadId?.ToString() ?? "-")</dd>
+            <dt>Value ID</dt>
+            <dd>@(selectedTask.ValueId?.ToString() ?? "-")</dd>
         </dl>
 
         <h3>Result</h3>

@@ -68,7 +68,7 @@ namespace SCP.StorageFSC.Data.Repositories
                         file.PhysicalPath,
                         file.OriginalFileName,
                         file.ContentType,
-                        FilestoreStateCompress = (short)file.FilestoreStateCompress,
+                        StateCompress = (short)file.StateCompress,
                         file.ReferenceCount,
                         file.CreatedUtc,
                         file.UpdatedUtc,

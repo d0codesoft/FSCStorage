@@ -25,6 +25,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id,
                     name,
                     is_active,
+                    total_size_bytes,
                     created_utc,
                     updated_utc,
                     row_version
@@ -36,6 +37,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     @ExternalTenantId,
                     @Name,
                     @IsActive,
+                    @TotalSizeBytes,
                     @CreatedUtc,
                     @UpdatedUtc,
                     @RowVersion
@@ -55,6 +57,7 @@ namespace SCP.StorageFSC.Data.Repositories
                         ExternalTenantId = tenant.ExternalTenantId,
                         tenant.Name,
                         IsActive = tenant.IsActive ? 1 : 0,
+                        tenant.TotalSizeBytes,
                         tenant.CreatedUtc,
                         tenant.UpdatedUtc,
                         RowVersion = tenant.RowVersion
@@ -86,6 +89,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
+                    total_size_bytes AS TotalSizeBytes,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
@@ -125,6 +129,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
+                    total_size_bytes AS TotalSizeBytes,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
@@ -164,6 +169,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
+                    total_size_bytes AS TotalSizeBytes,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
@@ -204,6 +210,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
+                    total_size_bytes AS TotalSizeBytes,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
@@ -245,6 +252,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id AS ExternalTenantId,
                     name AS Name,
                     is_active AS IsActive,
+                    total_size_bytes AS TotalSizeBytes,
                     created_utc AS CreatedUtc,
                     updated_utc AS UpdatedUtc,
                     row_version AS RowVersion
@@ -323,6 +331,7 @@ namespace SCP.StorageFSC.Data.Repositories
                     external_tenant_id = @ExternalTenantId,
                     name = @Name,
                     is_active = @IsActive,
+                    total_size_bytes = @TotalSizeBytes,
                     updated_utc = @UpdatedUtc,
                     row_version = @RowVersion
                 WHERE id = @Id;
@@ -341,6 +350,7 @@ namespace SCP.StorageFSC.Data.Repositories
                         ExternalTenantId = tenant.ExternalTenantId,
                         tenant.Name,
                         IsActive = tenant.IsActive ? 1 : 0,
+                        tenant.TotalSizeBytes,
                         tenant.UpdatedUtc,
                         RowVersion = tenant.RowVersion
                     },
@@ -388,6 +398,103 @@ namespace SCP.StorageFSC.Data.Repositories
             catch (SqliteException ex)
             {
                 throw new RepositoryException($"Failed to delete tenant '{id}' due to database error.", ex);
+            }
+        }
+
+        public async Task<bool> RecalculateTotalSizeBytesAsync(Guid tenantId, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                UPDATE tenants
+                SET
+                    total_size_bytes = COALESCE(
+                        (
+                            SELECT SUM(sf.file_size)
+                            FROM tenant_files tf
+                            INNER JOIN stored_files sf ON sf.id = tf.stored_file_id
+                            WHERE tf.tenant_id = tenants.id
+                              AND tf.is_active = 1
+                              AND sf.is_deleted = 0
+                        ),
+                        0
+                    ),
+                    updated_utc = @UpdatedUtc,
+                    row_version = @RowVersion
+                WHERE id = @TenantId;
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        TenantId = tenantId,
+                        UpdatedUtc = DateTime.UtcNow,
+                        RowVersion = Guid.CreateVersion7()
+                    },
+                    cancellationToken: cancellationToken));
+
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to recalculate tenant storage usage for tenant '{tenantId}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to recalculate tenant storage usage for tenant '{tenantId}' due to database error.", ex);
+            }
+        }
+
+        public async Task<int> RecalculateAllTotalSizeBytesAsync(CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                UPDATE tenants
+                SET
+                    total_size_bytes = COALESCE(
+                        (
+                            SELECT SUM(sf.file_size)
+                            FROM tenant_files tf
+                            INNER JOIN stored_files sf ON sf.id = tf.stored_file_id
+                            WHERE tf.tenant_id = tenants.id
+                              AND tf.is_active = 1
+                              AND sf.is_deleted = 0
+                        ),
+                        0
+                    ),
+                    updated_utc = @UpdatedUtc,
+                    row_version = randomblob(16);
+                """;
+
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+
+                return await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        UpdatedUtc = DateTime.UtcNow
+                    },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException("Failed to recalculate tenant storage usage for all tenants due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException("Failed to recalculate tenant storage usage for all tenants due to database error.", ex);
             }
         }
     }

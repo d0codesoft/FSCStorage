@@ -7,7 +7,9 @@ namespace scp.filestorage.webui.Models
         public string TypeName { get; set; } = string.Empty;
         public int Status { get; set; }
         public string StatusName { get; set; } = string.Empty;
-        public Guid? UploadId { get; set; }
+        public Guid? TenantId { get; set; }
+        public string Descr { get; set; } = string.Empty;
+        public Guid? ValueId { get; set; }
         public DateTime QueuedAtUtc { get; set; }
         public DateTime? StartedAtUtc { get; set; }
         public DateTime? CompletedAtUtc { get; set; }

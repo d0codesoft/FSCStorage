@@ -24,5 +24,10 @@ namespace SCP.StorageFSC.Data.Models
         /// Tenant active flag.
         /// </summary>
         public bool IsActive { get; set; }
+
+        /// <summary>
+        /// Total size of the tenant's storage usage in bytes.
+        /// </summary>
+        public long TotalSizeBytes { get; set; }
     }
 }

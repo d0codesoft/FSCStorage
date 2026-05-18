@@ -417,6 +417,16 @@ public sealed class TenantStorageServiceTests
             return Task.FromResult(_items.Any(item => item.Id == tenant.Id));
         }
 
+        public Task<bool> RecalculateTotalSizeBytesAsync(Guid tenantId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.Any(item => item.Id == tenantId));
+        }
+
+        public Task<int> RecalculateAllTotalSizeBytesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_items.Count);
+        }
+
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.RemoveAll(item => item.Id == id) > 0);

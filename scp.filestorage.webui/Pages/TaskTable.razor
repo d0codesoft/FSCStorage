@@ -14,7 +14,7 @@ else
             <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Task" Property="TaskId">
                 <Template Context="task">
                     <div class="primary-cell">@task.TaskId</div>
-                    <div class="secondary-cell">Upload: @(task.UploadId?.ToString() ?? "-")</div>
+                    <div class="secondary-cell">@task.Descr</div>
                 </Template>
             </RadzenDataGridColumn>
             <RadzenDataGridColumn TItem="BackgroundTaskViewModel" Title="Type" Property="TypeName" />

@@ -99,6 +99,54 @@ public sealed class BackgroundTaskRepositoryTests
         }
     }
 
+    [Fact]
+    public async Task InsertIfNotExistsAsync_PersistsTenantIdAndDescr()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        DapperTypeHandlers.Register();
+
+        var databasePath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.db");
+        var connectionString = $"Data Source={databasePath};Pooling=False";
+        var tenantId = Guid.NewGuid();
+        var valueId = Guid.NewGuid();
+
+        try
+        {
+            await using (var connection = new SqliteConnection(connectionString))
+            {
+                await connection.OpenAsync(cancellationToken);
+                await CreateSchemaAsync(connection);
+            }
+
+            var repository = new BackgroundTaskRepository(new TestConnectionFactory(connectionString));
+            var task = new BackgroundTask
+            {
+                TaskId = Guid.CreateVersion7(),
+                Type = 0,
+                Status = BackgroundTaskStatus.Queued,
+                TenantId = tenantId,
+                Descr = "Merge multipart upload test",
+                ValueId = valueId,
+                QueuedAtUtc = DateTime.UtcNow
+            };
+
+            await repository.InsertIfNotExistsAsync(task, cancellationToken);
+            var saved = await repository.GetByTaskIdAsync(task.TaskId, cancellationToken);
+
+            Assert.NotNull(saved);
+            Assert.Equal(tenantId, saved.TenantId);
+            Assert.Equal("Merge multipart upload test", saved.Descr);
+            Assert.Equal(valueId, saved.ValueId);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (File.Exists(databasePath))
+                File.Delete(databasePath);
+        }
+    }
+
     private static async Task CreateSchemaAsync(IDbConnection connection)
     {
         await connection.ExecuteAsync("""
@@ -108,6 +156,8 @@ public sealed class BackgroundTaskRepositoryTests
                 task_id BLOB NOT NULL CHECK(length(task_id) = 16),
                 type INTEGER NOT NULL,
                 status INTEGER NOT NULL,
+                tenant_id BLOB NULL CHECK(tenant_id IS NULL OR length(tenant_id) = 16),
+                descr TEXT NOT NULL,
                 upload_id BLOB NULL CHECK(upload_id IS NULL OR length(upload_id) = 16),
                 queued_at_utc TEXT NOT NULL,
                 started_at_utc TEXT NULL,
@@ -136,6 +186,8 @@ public sealed class BackgroundTaskRepositoryTests
                 task_id,
                 type,
                 status,
+                tenant_id,
+                descr,
                 upload_id,
                 queued_at_utc,
                 started_at_utc,
@@ -153,6 +205,8 @@ public sealed class BackgroundTaskRepositoryTests
                 @TaskId,
                 1,
                 @Status,
+                @TenantId,
+                @Descr,
                 NULL,
                 @QueuedAtUtc,
                 @StartedAtUtc,
@@ -170,6 +224,8 @@ public sealed class BackgroundTaskRepositoryTests
                 Id = Guid.NewGuid(),
                 TaskId = taskId ?? Guid.NewGuid(),
                 Status = (short)status,
+                TenantId = Guid.NewGuid(),
+                Descr = $"Task {status}",
                 QueuedAtUtc = nowUtc,
                 StartedAtUtc = status == BackgroundTaskStatus.Running ? nowUtc : null as DateTime?,
                 CompletedAtUtc = status == BackgroundTaskStatus.Completed ? nowUtc : null as DateTime?,

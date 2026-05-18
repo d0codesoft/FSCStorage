@@ -59,7 +59,7 @@ namespace SCP.StorageFSC.Data.Models
         /// <summary>
         /// Compression state for the stored file.
         /// </summary>
-        public FilestoreStateCompress FilestoreStateCompress { get; set; } = FilestoreStateCompress.NoCompressionNeeded;
+        public FilestoreStateCompress StateCompress { get; set; } = FilestoreStateCompress.NoCompressionNeeded;
 
         /// <summary>
         /// Number of active references to the file.

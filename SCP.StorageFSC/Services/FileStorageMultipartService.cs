@@ -353,7 +353,7 @@ namespace scp.filestorage.Services
                 cancellationToken: cancellationToken);
 
             await _backgroundTaskQueue.QueueAsync(
-                FileStorageBackgroundTask.MergeMultipartUpload(session.UploadId),
+                FileStorageBackgroundTask.MergeMultipartUpload(session.TenantId, session.UploadId),
                 cancellationToken);
 
             _logger.LogInformation(

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using scp.filestorage.Services;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
@@ -15,6 +16,7 @@ namespace SCP.StorageFSC.Controllers
     {
         private readonly IFileStorageService _fileStorageService;
         private readonly ILogger<FileStorageController> _logger;
+        
 
         public FileStorageController(
             IFileStorageService fileStorageService,
@@ -32,7 +34,7 @@ namespace SCP.StorageFSC.Controllers
         [RequestSizeLimit(long.MaxValue)]
         [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
         public async Task<IActionResult> Upload(
-            [FromForm(Name = "file")] IFormFile file,
+            [FromForm(Name = "file")] IFormFile? file,
             [FromForm] string? category,
             [FromForm] string? externalKey,
             CancellationToken cancellationToken)
@@ -56,7 +58,9 @@ namespace SCP.StorageFSC.Controllers
                 cancellationToken);
 
             if (result.Success)
+            {
                 return Ok(result);
+            }
 
             return result.Status switch
             {

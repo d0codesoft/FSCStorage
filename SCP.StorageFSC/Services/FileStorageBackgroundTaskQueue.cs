@@ -7,6 +7,7 @@ namespace scp.filestorage.Services
     public sealed class FileStorageBackgroundTaskQueue : IFileStorageBackgroundTaskQueue
     {
         private readonly IServiceScopeFactory _scopeFactory;
+
         private readonly Channel<FileStorageBackgroundTask> _queue =
             Channel.CreateUnbounded<FileStorageBackgroundTask>(new UnboundedChannelOptions
             {
@@ -34,13 +35,24 @@ namespace scp.filestorage.Services
             await using var scope = _scopeFactory.CreateAsyncScope();
             var repository = scope.ServiceProvider.GetRequiredService<IBackgroundTaskRepository>();
 
+            var alreadyExists = await repository.ExistsActiveAsync(
+                (short)task.Type,
+                task.TenantId,
+                task.ValueId == Guid.Empty ? null : task.ValueId,
+                cancellationToken);
+
+            if (alreadyExists)
+                return;
+
             await repository.InsertIfNotExistsAsync(
                 new BackgroundTask
                 {
                     TaskId = task.TaskId,
                     Type = (short)task.Type,
                     Status = BackgroundTaskStatus.Queued,
-                    UploadId = task.UploadId == Guid.Empty ? null : task.UploadId,
+                    TenantId = task.TenantId,
+                    Descr = task.Descr,
+                    ValueId = task.ValueId == Guid.Empty ? null : task.ValueId,
                     QueuedAtUtc = task.CreatedAtUtc
                 },
                 cancellationToken);
@@ -52,6 +64,31 @@ namespace scp.filestorage.Services
             CancellationToken cancellationToken)
         {
             return _queue.Reader.ReadAsync(cancellationToken);
+        }
+
+        public ValueTask<bool> ExistTaskAsync(
+            FileStorageBackgroundTaskType type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken = default)
+        {
+            return ExistTaskInRepositoryAsync(type, tenantId, valueId, cancellationToken);
+        }
+
+        private async ValueTask<bool> ExistTaskInRepositoryAsync(
+            FileStorageBackgroundTaskType type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken)
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IBackgroundTaskRepository>();
+
+            return await repository.ExistsActiveAsync(
+                (short)type,
+                tenantId,
+                valueId,
+                cancellationToken);
         }
     }
 }

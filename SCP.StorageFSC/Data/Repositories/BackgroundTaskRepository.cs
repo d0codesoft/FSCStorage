@@ -27,7 +27,9 @@ namespace SCP.StorageFSC.Data.Repositories
                     task_id,
                     type,
                     status,
-                    upload_id,
+                    tenant_id,
+                    descr,
+                    value_id,
                     queued_at_utc,
                     started_at_utc,
                     completed_at_utc,
@@ -44,7 +46,9 @@ namespace SCP.StorageFSC.Data.Repositories
                     @TaskId,
                     @Type,
                     @Status,
-                    @UploadId,
+                    @TenantId,
+                    @Descr,
+                    @ValueId,
                     @QueuedAtUtc,
                     @StartedAtUtc,
                     @CompletedAtUtc,
@@ -307,11 +311,44 @@ namespace SCP.StorageFSC.Data.Repositories
                 cancellationToken);
         }
 
+        public async Task<bool> ExistsActiveAsync(
+            short type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT COUNT(1)
+                FROM background_tasks
+                WHERE type     = @Type
+                  AND status   NOT IN (@Completed, @Failed, @Canceled)
+                  AND (@TenantId IS NULL OR tenant_id = @TenantId)
+                  AND (@ValueId  IS NULL OR value_id  = @ValueId)
+                LIMIT 1
+                """;
+
+            using var connection = _connectionFactory.CreateConnection();
+            var count = await connection.ExecuteScalarAsync<int>(
+                sql,
+                new
+                {
+                    Type       = type,
+                    Completed  = (short)BackgroundTaskStatus.Completed,
+                    Failed     = (short)BackgroundTaskStatus.Failed,
+                    Canceled   = (short)BackgroundTaskStatus.Canceled,
+                    TenantId   = tenantId?.ToString(),
+                    ValueId    = valueId?.ToString()
+                });
+
+            return count > 0;
+        }
+
         public async Task<int> DeleteCompletedOlderThanAsync(
             DateTime cutoffUtc,
             CancellationToken cancellationToken = default)
         {
             const string sql = """
+                
                 DELETE FROM background_tasks
                 WHERE status IN (2, 3, 4)
                   AND COALESCE(completed_at_utc, failed_at_utc, updated_utc, queued_at_utc) < @CutoffUtc;
@@ -379,7 +416,9 @@ namespace SCP.StorageFSC.Data.Repositories
                 task.TaskId,
                 task.Type,
                 Status = (short)task.Status,
-                task.UploadId,
+                task.TenantId,
+                task.Descr,
+                task.ValueId,
                 task.QueuedAtUtc,
                 task.StartedAtUtc,
                 task.CompletedAtUtc,
@@ -398,7 +437,9 @@ namespace SCP.StorageFSC.Data.Repositories
                 task_id AS TaskId,
                 type AS Type,
                 status AS Status,
-                upload_id AS UploadId,
+                tenant_id AS TenantId,
+                descr AS Descr,
+                value_id AS ValueId,
                 queued_at_utc AS QueuedAtUtc,
                 started_at_utc AS StartedAtUtc,
                 completed_at_utc AS CompletedAtUtc,

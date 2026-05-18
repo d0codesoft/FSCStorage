@@ -45,5 +45,15 @@ namespace SCP.StorageFSC.Data.Repositories
         Task<int> DeleteCompletedOlderThanAsync(
             DateTime cutoffUtc,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Returns <c>true</c> if an active (Queued or Running) task matching
+        /// <paramref name="type"/>, <paramref name="tenantId"/>, and <paramref name="valueId"/> exists.
+        /// </summary>
+        Task<bool> ExistsActiveAsync(
+            short type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken = default);
     }
 }

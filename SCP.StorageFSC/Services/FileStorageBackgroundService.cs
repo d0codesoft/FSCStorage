@@ -54,7 +54,7 @@ namespace scp.filestorage.Services
                 foreach (var session in sessions)
                 {
                     await _queue.QueueAsync(
-                        FileStorageBackgroundTask.MergeMultipartUpload(session.UploadId),
+                        FileStorageBackgroundTask.MergeMultipartUpload(session.TenantId, session.UploadId),
                         cancellationToken);
                 }
 
@@ -111,8 +111,8 @@ namespace scp.filestorage.Services
                 {
                     case FileStorageBackgroundTaskType.MergeMultipartUpload:
                         var processor = scope.ServiceProvider.GetRequiredService<IMultipartUploadBackgroundTaskProcessor>();
-                        await processor.MergePartsAsync(task.UploadId, cancellationToken);
-                        resultSummary = $"Multipart upload {task.UploadId} merged.";
+                        await processor.MergePartsAsync(task.ValueId, cancellationToken);
+                        resultSummary = $"Multipart upload {task.ValueId} merged.";
                         break;
 
                     case FileStorageBackgroundTaskType.CheckDatabaseConsistency:
@@ -139,6 +139,35 @@ namespace scp.filestorage.Services
                             cleanupResult.DeletedFileCount);
                         break;
 
+                    case FileStorageBackgroundTaskType.UpdateSizeTenantStorageUsage:
+                        var tenantRepository = scope.ServiceProvider.GetRequiredService<ITenantRepository>();
+
+                        if (task.TenantId.HasValue)
+                        {
+                            var updated = await tenantRepository.RecalculateTotalSizeBytesAsync(task.TenantId.Value, cancellationToken);
+                            resultSummary = updated
+                                ? $"Tenant {task.TenantId.Value} storage usage updated."
+                                : $"Tenant {task.TenantId.Value} not found.";
+
+                            _logger.LogInformation(
+                                "Tenant storage usage update task finished. TaskId={TaskId}, TenantId={TenantId}, Updated={Updated}",
+                                task.TaskId,
+                                task.TenantId.Value,
+                                updated);
+                        }
+                        else
+                        {
+                            var updatedTenantCount = await tenantRepository.RecalculateAllTotalSizeBytesAsync(cancellationToken);
+                            resultSummary = $"Updated tenant storage usage for {updatedTenantCount} tenants.";
+
+                            _logger.LogInformation(
+                                "Tenant storage usage update task finished. TaskId={TaskId}, UpdatedTenantCount={UpdatedTenantCount}",
+                                task.TaskId,
+                                updatedTenantCount);
+                        }
+
+                        break;
+
                     default:
                         _logger.LogWarning("Unknown file storage background task type. TaskId={TaskId}, Type={TaskType}", task.TaskId, task.Type);
                         resultSummary = $"Unknown task type: {task.Type}.";
@@ -159,7 +188,7 @@ namespace scp.filestorage.Services
                     "File storage background task canceled during application shutdown. TaskId={TaskId}, Type={TaskType}, UploadId={UploadId}",
                     task.TaskId,
                     task.Type,
-                    task.UploadId);
+                    task.ValueId);
             }
             catch (Exception ex)
             {
@@ -169,7 +198,7 @@ namespace scp.filestorage.Services
                     "File storage background task failed. TaskId={TaskId}, Type={TaskType}, UploadId={UploadId}",
                     task.TaskId,
                     task.Type,
-                    task.UploadId);
+                    task.ValueId);
             }
         }
     }

@@ -25,6 +25,7 @@ namespace SCP.StorageFSC.Data.Schema
                 external_tenant_id BLOB NOT NULL CHECK(length(external_tenant_id) = 16),
                 name               TEXT    NOT NULL,
                 is_active          INTEGER NOT NULL DEFAULT 1,
+                total_size_bytes   INTEGER NOT NULL DEFAULT 0,
                 created_utc        TEXT    NOT NULL 
                                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
                 updated_utc        TEXT    NULL,
@@ -101,6 +102,8 @@ namespace SCP.StorageFSC.Data.Schema
                                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
                 updated_utc        TEXT    NULL,
                 row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
+                state_compress     INTEGER NOT NULL DEFAULT 0,
+                
                         
                 CONSTRAINT uq_stored_files_sha256 UNIQUE (sha256),
                 CONSTRAINT uq_stored_files_physical_path UNIQUE (physical_path)
@@ -121,6 +124,8 @@ namespace SCP.StorageFSC.Data.Schema
                                DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
                 updated_utc    TEXT    NULL,
                 row_version    BLOB NOT NULL CHECK(length(row_version) = 16),
+                
+                
                         
                 CONSTRAINT uq_tenant_files_file_guid UNIQUE (file_guid),
                 FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
@@ -190,6 +195,44 @@ namespace SCP.StorageFSC.Data.Schema
                     REFERENCES multipart_upload_sessions(id)
                     ON DELETE CASCADE
             );
+            
+            CREATE TABLE IF NOT EXISTS background_tasks
+            (
+                id                 BLOB NOT NULL PRIMARY KEY CHECK(length(id) = 16),
+                task_id            BLOB NOT NULL CHECK(length(task_id) = 16),
+                type               INTEGER NOT NULL,
+                status             INTEGER NOT NULL DEFAULT 0,
+                tenant_id          BLOB NULL CHECK(tenant_id IS NULL OR length(tenant_id) = 16),
+                descr              TEXT NOT NULL,
+                value_id           BLOB NULL CHECK(value_id IS NULL OR length(value_id) = 16),
+                queued_at_utc      TEXT NOT NULL,
+                started_at_utc     TEXT NULL,
+                completed_at_utc   TEXT NULL,
+                failed_at_utc      TEXT NULL,
+                error_message      TEXT NULL,
+                result_summary     TEXT NULL,
+                created_utc        TEXT NOT NULL
+                                   DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+                updated_utc        TEXT NULL,
+                row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
+            
+                CONSTRAINT uq_background_tasks_task_id UNIQUE (task_id)
+            );
+            
+            CREATE INDEX IF NOT EXISTS ix_background_tasks_status
+                ON background_tasks(status);
+            
+            CREATE INDEX IF NOT EXISTS ix_background_tasks_type
+                ON background_tasks(type);
+
+            CREATE INDEX IF NOT EXISTS ix_background_tasks_tenant_id
+                ON background_tasks(tenant_id);
+            
+            CREATE INDEX IF NOT EXISTS ix_background_tasks_queued_at_utc
+                ON background_tasks(queued_at_utc);
+            
+            CREATE INDEX IF NOT EXISTS ix_background_tasks_completed_at_utc
+                ON background_tasks(completed_at_utc);
 
             CREATE INDEX IF NOT EXISTS ix_multipart_upload_sessions_tenant_id
                 ON multipart_upload_sessions(tenant_id);
@@ -253,6 +296,15 @@ namespace SCP.StorageFSC.Data.Schema
 
             CREATE INDEX IF NOT EXISTS ix_tenant_files_external_key
                 ON tenant_files(external_key);
+                
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_background_tasks_pending_dedup
+            ON background_tasks
+            (
+                COALESCE(tenant_id, X'00000000000000000000000000000000'),
+                type,
+                COALESCE(value_id, X'00000000000000000000000000000000'),
+                status,
+            )    
             """;
     }
 }

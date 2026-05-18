@@ -284,6 +284,16 @@ public sealed class ApiTokenAuthenticationMiddlewareTests
             return Task.FromResult(_tenants.Any(item => item.Id == tenant.Id));
         }
 
+        public Task<bool> RecalculateTotalSizeBytesAsync(Guid tenantId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tenants.Any(item => item.Id == tenantId));
+        }
+
+        public Task<int> RecalculateAllTotalSizeBytesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_tenants.Count);
+        }
+
         public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_tenants.RemoveAll(tenant => tenant.Id == id) > 0);

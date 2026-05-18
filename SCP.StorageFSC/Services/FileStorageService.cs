@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using scp.filestorage.Common;
+using scp.filestorage.Services;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
@@ -16,6 +17,7 @@ namespace SCP.StorageFSC.Services
         private readonly IStoredFileRepository _storedFileRepository;
         private readonly ICurrentTenantAccessor _currentTenantAccessor;
         private readonly ITenantAuthorizationService _tenantAuthorizationService;
+        private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
         private readonly ApplicationPaths _options;
         private readonly ILogger<FileStorageService> _logger;
 
@@ -24,6 +26,7 @@ namespace SCP.StorageFSC.Services
             IStoredFileRepository storedFileRepository,
             ICurrentTenantAccessor currentTenantAccessor,
             ITenantAuthorizationService tenantAuthorizationService,
+            IFileStorageBackgroundTaskQueue backgroundTaskQueue,
             ApplicationPaths options,
             ILogger<FileStorageService> logger)
         {
@@ -31,6 +34,7 @@ namespace SCP.StorageFSC.Services
             _storedFileRepository = storedFileRepository;
             _currentTenantAccessor = currentTenantAccessor;
             _tenantAuthorizationService = tenantAuthorizationService;
+            _backgroundTaskQueue = backgroundTaskQueue;
             _options = options;
             _logger = logger;
         }
@@ -44,7 +48,7 @@ namespace SCP.StorageFSC.Services
             var current = _currentTenantAccessor.GetRequired();
             var tenantId = GetRequiredTenantId(current);
 
-            if (request.Content is null || request.Content == Stream.Null)
+            if (request.Content == Stream.Null)
             {
                 _logger.LogWarning(
                     "File content is null or empty. TenantId={TenantId}, FileName={FileName}",
@@ -56,7 +60,7 @@ namespace SCP.StorageFSC.Services
                         "File content is required.");
             }
 
-            if (!current.CanWrite && !current.IsAdmin)
+            if (!(current.CanWrite || current.IsAdmin))
             {
                 return SaveFileResult.Fail(
                     SaveFileStatus.AccessDenied,
@@ -113,7 +117,10 @@ namespace SCP.StorageFSC.Services
                     tenantFile.TenantId,
                     tenantFile.StoredFileId,
                     tenantFile.FileGuid);
-
+                
+                var task = FileStorageBackgroundTask.UpdateSizeTenantStorageUsage(tenantId);
+                await _backgroundTaskQueue.QueueAsync(task, cancellationToken);
+                
                 return SaveFileResult.Ok(Map(tenantFile, storedFile));
             }
             catch
@@ -212,7 +219,7 @@ namespace SCP.StorageFSC.Services
                 PhysicalPath = finalRelativePath.Replace('\\', '/'),
                 OriginalFileName = safeFileName,
                 ContentType = effectiveContentType,
-                FilestoreStateCompress = canBeCompressed
+                StateCompress = canBeCompressed
                     ? FilestoreStateCompress.CanBeCompressed
                     : FilestoreStateCompress.NoCompressionNeeded,
                 ReferenceCount = 1,
@@ -381,6 +388,9 @@ namespace SCP.StorageFSC.Services
                 tenantFile.StoredFileId,
                 cancellationToken);
 
+            var task = FileStorageBackgroundTask.UpdateSizeTenantStorageUsage(tenantId);
+            await _backgroundTaskQueue.QueueAsync(task, cancellationToken);
+
             return true;
         }
 
@@ -503,7 +513,7 @@ namespace SCP.StorageFSC.Services
                 Category = tenantFile.Category,
                 ExternalKey = tenantFile.ExternalKey,
                 ContentType = storedFile.ContentType,
-                FilestoreStateCompress = storedFile.FilestoreStateCompress,
+                StateCompress = storedFile.StateCompress,
                 FileSize = storedFile.FileSize,
                 Sha256 = storedFile.Sha256,
                 Crc32 = storedFile.Crc32,

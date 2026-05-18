@@ -102,7 +102,9 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
         Assert.Null(result.FinalChecksumSha256);
         var queuedTask = Assert.Single(_queue.Items);
         Assert.Equal(FileStorageBackgroundTaskType.MergeMultipartUpload, queuedTask.Type);
-        Assert.Equal(init.UploadId, queuedTask.UploadId);
+        Assert.Equal(_tenantId, queuedTask.TenantId);
+        Assert.Equal(init.UploadId, queuedTask.ValueId);
+        Assert.Equal($"Merge multipart upload {init.UploadId}", queuedTask.Descr);
 
         var session = Assert.Single(_sessions.Items);
         Assert.Equal(MultipartUploadStatus.Completing, session.Status);
@@ -357,6 +359,19 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
         public ValueTask<FileStorageBackgroundTask> DequeueAsync(CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(_items[0]);
+        }
+
+        public ValueTask<bool> ExistTaskAsync(
+            FileStorageBackgroundTaskType type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken = default)
+        {
+            var exists = _items.Any(t =>
+                t.Type == type &&
+                t.TenantId == tenantId &&
+                (valueId == null || t.ValueId == valueId));
+            return ValueTask.FromResult(exists);
         }
     }
 
