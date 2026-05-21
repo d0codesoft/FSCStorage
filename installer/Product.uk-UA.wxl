@@ -6,8 +6,11 @@
   <String Id="WelcomeDlgDescription" Value="Цей майстер інсталює FSC Storage Service: файлове сховище з HTTP API, фоновими завданнями обслуговування та адміністративною CLI-утилітою. Натисніть Далі, щоб продовжити інсталяцію." />
   <String Id="LicenseAgreementDlgDescription" Value="Перед інсталяцією FSC Storage Service уважно прочитайте умови ліцензійної угоди." />
   <String Id="UpgradeDetectedDlgTitle" Value="Оновлення FSC Storage Service" />
-  <String Id="UpgradeDetectedDlgDescription" Value="Виявлено встановлену версію. Буде виконано оновлення." />
-  <String Id="UpgradeDetectedDlgBody" Value="Параметри зберігання даних, HTTP/HTTPS і облікового запису служби не запитуватимуться повторно. Наявний appsettings.json буде збережено." />
+  <String Id="UpgradeDetectedDlgDescription" Value="Виявлено старішу встановлену версію. Виберіть, як продовжити." />
+  <String Id="UpgradeDetectedDlgBody" Value="Оновлення встановить новішу версію та збереже наявний appsettings.json. Відновлення запустить Windows Installer repair для поточної встановленої версії." />
+  <String Id="UpgradeDetectedDlgActionLabel" Value="Виберіть дію:" />
+  <String Id="UpgradeDetectedDlgUpgradeButton" Value="Оновити" />
+  <String Id="UpgradeDetectedDlgRepairButton" Value="Відновити" />
   <String Id="MaintenanceTypeDlgTitle" Value="Обслуговування FSC Storage Service" />
   <String Id="MaintenanceTypeDlgDescription" Value="Виберіть дію для встановленої програми." />
   <String Id="MaintenanceTypeDlgRepairButton" Value="Відновити" />
@@ -51,4 +54,30 @@
   <String Id="msierrUSRFailedUserGroupAdd" Value="Не вдалося додати користувача до групи. ([2] [3] [4] [5])" />
   <String Id="msierrUSRFailedGrantLogonAsService" Value="Не вдалося надати користувачу право входу як служба. ([2] [3] [4] [5])" />
   <String Id="msierrUSRFailedUserCreateExists" Value="Не вдалося створити користувача, оскільки він уже існує. ([2] [3] [4] [5])" />
+  <String Id="ProgressTextCostFinalize" Value="Обчислення вимог для встановлення" />
+  <String Id="ProgressTextCreateFolders" Value="Створення папок" />
+  <String Id="ProgressTemplateCreateFolders" Value="Папка: [1]" />
+  <String Id="ProgressTextRemoveFolders" Value="Видалення папок" />
+  <String Id="ProgressTemplateRemoveFolders" Value="Папка: [1]" />
+  <String Id="ProgressTextInstallFiles" Value="Копіювання файлів" />
+  <String Id="ProgressTemplateInstallFiles" Value="Файл: [1], папка: [9]" />
+  <String Id="ProgressTextRemoveFiles" Value="Видалення файлів" />
+  <String Id="ProgressTemplateRemoveFiles" Value="Файл: [1], папка: [9]" />
+  <String Id="ProgressTextWriteRegistryValues" Value="Запис значень реєстру" />
+  <String Id="ProgressTemplateWriteRegistryValues" Value="Ключ: [1], назва: [2]" />
+  <String Id="ProgressTextRemoveRegistryValues" Value="Видалення значень реєстру" />
+  <String Id="ProgressTemplateRemoveRegistryValues" Value="Ключ: [1], назва: [2]" />
+  <String Id="ProgressTextInstallServices" Value="Встановлення служб" />
+  <String Id="ProgressTemplateInstallServices" Value="Служба: [1]" />
+  <String Id="ProgressTextStartServices" Value="Запуск служб" />
+  <String Id="ProgressTemplateStartServices" Value="Служба: [1]" />
+  <String Id="ProgressTextStopServices" Value="Зупинення служб" />
+  <String Id="ProgressTemplateStopServices" Value="Служба: [1]" />
+  <String Id="ProgressTextDeleteServices" Value="Видалення служб" />
+  <String Id="ProgressTemplateDeleteServices" Value="Служба: [1]" />
+  <String Id="ProgressTextRegisterProduct" Value="Реєстрація продукту" />
+  <String Id="ProgressTextPublishProduct" Value="Публікація відомостей про продукт" />
+  <String Id="ProgressTextRemoveExistingProducts" Value="Видалення попередньої версії" />
+  <String Id="ProgressTextConfigureTransport" Value="Налаштування HTTP/HTTPS" />
+  <String Id="ProgressTextLaunchInstalledVersionRepair" Value="Запуск відновлення встановленої версії" />
 </WixLocalization>

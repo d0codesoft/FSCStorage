@@ -94,7 +94,7 @@ namespace SCP.StorageFSC.Data.Schema
                 physical_path      TEXT    NOT NULL,
                 original_file_name TEXT    NOT NULL,
                 content_type       TEXT    NULL,
-                filestore_state_compress INTEGER NOT NULL DEFAULT 0,
+                state_compress     INTEGER NOT NULL DEFAULT 0,
                 reference_count    INTEGER NOT NULL DEFAULT 0,
                 deleted_utc        TEXT    NULL,
                 is_deleted         INTEGER NOT NULL DEFAULT 0,
@@ -102,7 +102,6 @@ namespace SCP.StorageFSC.Data.Schema
                                    DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
                 updated_utc        TEXT    NULL,
                 row_version        BLOB NOT NULL CHECK(length(row_version) = 16),
-                state_compress     INTEGER NOT NULL DEFAULT 0,
                 
                         
                 CONSTRAINT uq_stored_files_sha256 UNIQUE (sha256),
@@ -302,9 +301,9 @@ namespace SCP.StorageFSC.Data.Schema
             (
                 COALESCE(tenant_id, X'00000000000000000000000000000000'),
                 type,
-                COALESCE(value_id, X'00000000000000000000000000000000'),
-                status,
+                COALESCE(value_id, X'00000000000000000000000000000000')
             )    
+            WHERE status IN (0, 1);
             """;
     }
 }

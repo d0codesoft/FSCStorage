@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using scp.filestorage.Services;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
@@ -19,6 +20,7 @@ public sealed class FileStorageServiceTests : IDisposable
     private readonly InMemoryTenantFileRepository _tenantFiles = new();
     private readonly TestCurrentTenantAccessor _currentTenant = new();
     private readonly TestTenantAuthorizationService _authorization = new();
+    private readonly TestFileStorageBackgroundTaskQueue _backgroundTaskQueue = new();
 
     public FileStorageServiceTests()
     {
@@ -219,6 +221,7 @@ public sealed class FileStorageServiceTests : IDisposable
             _storedFiles,
             _currentTenant,
             _authorization,
+            _backgroundTaskQueue,
             new ApplicationPaths()
             {
                 BasePath = _dataPath,
@@ -227,6 +230,28 @@ public sealed class FileStorageServiceTests : IDisposable
                 TempPath = Path.Combine(_dataPath, "temp")
             },
             NullLogger<FileStorageService>.Instance);
+    }
+
+    private sealed class TestFileStorageBackgroundTaskQueue : IFileStorageBackgroundTaskQueue
+    {
+        public ValueTask QueueAsync(FileStorageBackgroundTask task, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask<FileStorageBackgroundTask> DequeueAsync(CancellationToken cancellationToken)
+        {
+            throw new NotSupportedException();
+        }
+
+        public ValueTask<bool> ExistTaskAsync(
+            FileStorageBackgroundTaskType type,
+            Guid? tenantId,
+            Guid? valueId,
+            CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(false);
+        }
     }
 
     private async Task<TenantFile> InsertTenantFileAsync(

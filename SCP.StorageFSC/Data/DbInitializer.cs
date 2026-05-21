@@ -66,11 +66,19 @@ namespace SCP.StorageFSC.Data
             var metadataTableExists = await DbMetadataTableExistsAsync(connection, cancellationToken);
             _logger.LogInformation("Metadata table exists: {Exists}", metadataTableExists);
 
+            bool isNewDatabase = !metadataTableExists;
             if (!metadataTableExists)
             {
                 _logger.LogInformation("Creating metadata table and inserting initial record.");
                 await CreateMetadataTableAsync(connection, cancellationToken);
                 await InsertInitialMetadataAsync(connection, cancellationToken);
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    PRAGMA journal_mode=WAL;
+                    PRAGMA foreign_keys=ON;
+                    PRAGMA busy_timeout=30000;
+                """;
+                command.ExecuteNonQuery();
             }
 
             var currentVersion = await GetCurrentSchemaVersionAsync(connection, cancellationToken);

@@ -6,8 +6,11 @@
   <String Id="WelcomeDlgDescription" Value="This wizard will install FSC Storage Service: file storage with an HTTP API, background maintenance tasks, and an administrative CLI utility. Click Next to continue the installation." />
   <String Id="LicenseAgreementDlgDescription" Value="Please read the license agreement carefully before installing FSC Storage Service." />
   <String Id="UpgradeDetectedDlgTitle" Value="Upgrade FSC Storage Service" />
-  <String Id="UpgradeDetectedDlgDescription" Value="An installed version was detected. The installer will perform an upgrade." />
-  <String Id="UpgradeDetectedDlgBody" Value="Data storage, HTTP/HTTPS, and service account settings will not be requested again. The existing appsettings.json will be preserved." />
+  <String Id="UpgradeDetectedDlgDescription" Value="An older installed version was detected. Choose how to continue." />
+  <String Id="UpgradeDetectedDlgBody" Value="Upgrade installs the newer version and preserves the existing appsettings.json. Repair runs Windows Installer repair for the currently installed version." />
+  <String Id="UpgradeDetectedDlgActionLabel" Value="Choose an action:" />
+  <String Id="UpgradeDetectedDlgUpgradeButton" Value="Upgrade" />
+  <String Id="UpgradeDetectedDlgRepairButton" Value="Repair" />
   <String Id="MaintenanceTypeDlgTitle" Value="Maintain FSC Storage Service" />
   <String Id="MaintenanceTypeDlgDescription" Value="Choose an action for the installed application." />
   <String Id="MaintenanceTypeDlgRepairButton" Value="Repair" />
@@ -46,4 +49,30 @@
   <String Id="InvalidServicePasswordDlgText" Value="Enter the user password." />
   <String Id="InvalidServicePasswordConfirmDlgText" Value="Password and password confirmation do not match." />
   <String Id="OkButton" Value="OK" />
+  <String Id="ProgressTextCostFinalize" Value="Calculating installation requirements" />
+  <String Id="ProgressTextCreateFolders" Value="Creating folders" />
+  <String Id="ProgressTemplateCreateFolders" Value="Folder: [1]" />
+  <String Id="ProgressTextRemoveFolders" Value="Removing folders" />
+  <String Id="ProgressTemplateRemoveFolders" Value="Folder: [1]" />
+  <String Id="ProgressTextInstallFiles" Value="Copying files" />
+  <String Id="ProgressTemplateInstallFiles" Value="File: [1], folder: [9]" />
+  <String Id="ProgressTextRemoveFiles" Value="Removing files" />
+  <String Id="ProgressTemplateRemoveFiles" Value="File: [1], folder: [9]" />
+  <String Id="ProgressTextWriteRegistryValues" Value="Writing registry values" />
+  <String Id="ProgressTemplateWriteRegistryValues" Value="Key: [1], name: [2]" />
+  <String Id="ProgressTextRemoveRegistryValues" Value="Removing registry values" />
+  <String Id="ProgressTemplateRemoveRegistryValues" Value="Key: [1], name: [2]" />
+  <String Id="ProgressTextInstallServices" Value="Installing services" />
+  <String Id="ProgressTemplateInstallServices" Value="Service: [1]" />
+  <String Id="ProgressTextStartServices" Value="Starting services" />
+  <String Id="ProgressTemplateStartServices" Value="Service: [1]" />
+  <String Id="ProgressTextStopServices" Value="Stopping services" />
+  <String Id="ProgressTemplateStopServices" Value="Service: [1]" />
+  <String Id="ProgressTextDeleteServices" Value="Removing services" />
+  <String Id="ProgressTemplateDeleteServices" Value="Service: [1]" />
+  <String Id="ProgressTextRegisterProduct" Value="Registering product" />
+  <String Id="ProgressTextPublishProduct" Value="Publishing product information" />
+  <String Id="ProgressTextRemoveExistingProducts" Value="Removing previous version" />
+  <String Id="ProgressTextConfigureTransport" Value="Configuring HTTP/HTTPS settings" />
+  <String Id="ProgressTextLaunchInstalledVersionRepair" Value="Starting repair for installed version" />
 </WixLocalization>

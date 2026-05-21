@@ -4,7 +4,7 @@
     <OutputType>Package</OutputType>
     <Platform>x64</Platform>
     <Cultures>en-US;uk-UA</Cultures>
-    <ProductVersion Condition="'$(ProductVersion)' == ''">1.0.0</ProductVersion>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">$(Version)</ProductVersion>
     <PublishRuntime Condition="'$(PublishRuntime)' == ''">win-x64</PublishRuntime>
     <PublishOutput>$(MSBuildThisFileDirectory)..\publish\$(PublishRuntime)</PublishOutput>
     <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishOutput)</DefineConstants>

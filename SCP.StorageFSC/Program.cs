@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.FileProviders;
 using scp.filestorage;
 using scp.filestorage.Data.Dto;
@@ -73,7 +74,14 @@ builder.Services.AddSingleton(applicationPaths);
 builder.InitializeDataFolder(applicationPaths);
 builder.InitializeLogging(applicationPaths);
 
-var connectionString = $"Data Source={Path.Combine(applicationPaths.BasePath, "storage.db")}";
+var connectionString = new SqliteConnectionStringBuilder
+{
+    DataSource = Path.Combine(applicationPaths.BasePath, "storage.db"),
+    Mode = SqliteOpenMode.ReadWriteCreate,
+    Cache = SqliteCacheMode.Shared,
+    Pooling = true,
+    DefaultTimeout = 30
+}.ToString();
 
 builder.Services.AddSingleton<ICurrentTenantAccessor, CurrentTenantAccessor>();
 builder.Services.AddHttpContextAccessor();
@@ -166,5 +174,29 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("ApplicationLifetime");
+    logger.LogInformation("Application is stopping. Requesting FileStorageBackgroundService shutdown...");
+
+    try
+    {
+        HostedServiceExtension.StopHostedService<FileStorageBackgroundService>(app.Services, logger);
+        logger.LogInformation("FileStorageBackgroundService stopped successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "An error occurred while stopping FileStorageBackgroundService during application shutdown.");
+    }
+});
+
+app.Lifetime.ApplicationStopped.Register(() =>
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("ApplicationLifetime");
+    logger.LogInformation("Application has stopped.");
+});
 
 app.Run();

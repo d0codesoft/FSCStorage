@@ -1,0 +1,225 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+	<Fragment>
+		<UI Id="FscStorageTransportUI">
+			<Dialog Id="TransportDlg"
+					Width="370"
+					Height="270"
+					Title="!(loc.ProductName)">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.TransportDlgTitle)" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.TransportDlgDescription)" />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="TransportModeGroup"
+						 Type="RadioButtonGroup"
+						 X="20"
+						 Y="60"
+						 Width="320"
+						 Height="66"
+						 Property="TRANSPORT_MODE">
+					<RadioButtonGroup Property="TRANSPORT_MODE">
+						<RadioButton Value="HTTP"
+									 X="0"
+									 Y="0"
+									 Width="260"
+									 Height="17"
+									 Text="!(loc.TransportModeHttpOnly)" />
+
+						<RadioButton Value="EXISTING_PFX"
+									 X="0"
+									 Y="22"
+									 Width="260"
+									 Height="17"
+									 Text="!(loc.TransportModeExistingPfx)" />
+
+						<RadioButton Value="SELF_SIGNED"
+									 X="0"
+									 Y="44"
+									 Width="260"
+									 Height="17"
+									 Text="!(loc.TransportModeSelfSigned)" />
+					</RadioButtonGroup>
+				</Control>
+
+				<Control Id="ExistingPfxPathLabel"
+						 Type="Text"
+						 X="35"
+						 Y="132"
+						 Width="95"
+						 Height="15"
+						 Text="!(loc.TransportDlgExistingPfxPathLabel)"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 ShowCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPathEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="129"
+						 Width="200"
+						 Height="18"
+						 Property="EXISTING_PFX_PATH"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 ShowCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="157"
+						 Width="95"
+						 Height="15"
+						 Text="!(loc.TransportDlgExistingPfxPasswordLabel)"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 ShowCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="ExistingPfxPasswordEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="154"
+						 Width="200"
+						 Height="18"
+						 Property="EXISTING_PFX_PASSWORD"
+						 Password="yes"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"EXISTING_PFX"'
+						 ShowCondition='TRANSPORT_MODE="EXISTING_PFX"' />
+
+				<Control Id="SelfSignedNamesLabel"
+						 Type="Text"
+						 X="35"
+						 Y="132"
+						 Width="95"
+						 Height="25"
+						 Text="!(loc.TransportDlgSelfSignedNamesLabel)"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 ShowCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedNamesEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="129"
+						 Width="200"
+						 Height="18"
+						 Property="SELF_SIGNED_DNS_NAMES"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 ShowCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="157"
+						 Width="95"
+						 Height="25"
+						 Text="!(loc.TransportDlgSelfSignedPasswordLabel)"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 ShowCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="SelfSignedPasswordEdit"
+						 Type="Edit"
+						 X="135"
+						 Y="154"
+						 Width="200"
+						 Height="18"
+						 Property="SELF_SIGNED_PFX_PASSWORD"
+						 Password="yes"
+						 HideCondition='TRANSPORT_MODE&lt;&gt;"SELF_SIGNED"'
+						 ShowCondition='TRANSPORT_MODE="SELF_SIGNED"' />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="DataDirDlg" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+					<Publish Event="SpawnDialog"
+							 Value="InvalidExistingPfxPathDlg"
+							 Order="1"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PATH=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidExistingPfxPasswordDlg"
+							 Order="2"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidSelfSignedNamesDlg"
+							 Order="3"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_DNS_NAMES=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidSelfSignedPasswordDlg"
+							 Order="4"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_PFX_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="10"
+							 Condition="TRANSPORT_MODE=&quot;HTTP&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="11"
+							 Condition="TRANSPORT_MODE=&quot;EXISTING_PFX&quot; AND EXISTING_PFX_PATH&lt;&gt;&quot;&quot; AND EXISTING_PFX_PASSWORD&lt;&gt;&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="ServiceAccountDlg"
+							 Order="12"
+							 Condition="TRANSPORT_MODE=&quot;SELF_SIGNED&quot; AND SELF_SIGNED_DNS_NAMES&lt;&gt;&quot;&quot; AND SELF_SIGNED_PFX_PASSWORD&lt;&gt;&quot;&quot;" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+		</UI>
+	</Fragment>
+</Wix>

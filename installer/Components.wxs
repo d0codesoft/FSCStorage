@@ -1,0 +1,134 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<Fragment>
+		<Component Id="DataFolderComponent" Directory="DATAFOLDER" Guid="*">
+			<CreateFolder />
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="DataFolder"
+			  Type="string"
+			  Value="[DATAFOLDER]"
+			  KeyPath="yes" />
+		</Component>
+
+		<Component Id="InstallFolderRegistryComponent" Directory="INSTALLFOLDER" Guid="*">
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="InstallFolder"
+			  Type="string"
+			  Value="[INSTALLFOLDER]"
+			  KeyPath="yes" />
+		</Component>
+
+		<Component Id="InstallFolderCleanupComponent" Directory="INSTALLFOLDER" Guid="*">
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="InstallFolderCleanup"
+			  Type="integer"
+			  Value="1"
+			  KeyPath="yes" />
+
+			<util:RemoveFolderEx
+			  Id="RemoveInstallFolderTree"
+			  On="uninstall"
+			  Property="INSTALLFOLDER" />
+		</Component>
+
+		<Component Id="InstallerToolComponent" Directory="INSTALLFOLDER" Guid="*">
+			<File Id="InstallerToolExe" Source="$(var.PublishDir)\FSCStorage.InstallerTool.exe" KeyPath="yes" />
+		</Component>
+
+		<ComponentGroup Id="PublishedFiles" Directory="INSTALLFOLDER">
+			<Files Include="$(var.PublishDir)\**">
+				<Exclude Files="$(var.PublishDir)\appsettings.json" />
+				<Exclude Files="$(var.PublishDir)\scp.filestorage.exe" />
+				<Exclude Files="$(var.PublishDir)\FSCStorage.InstallerTool.exe" />
+			</Files>
+		</ComponentGroup>
+
+		<Component Id="AppSettingsComponent" Directory="INSTALLFOLDER" Guid="*" NeverOverwrite="yes" Permanent="yes">
+			<File Id="AppSettingsJson" Source="$(var.PublishDir)\appsettings.json" KeyPath="yes" />
+		</Component>
+
+		<!--
+      Service component is installed only when INSTALL_AS_SERVICE=1.
+      The service executable is excluded from PublishedFiles and installed here as the service component key path.
+    -->
+		<Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="*" Condition='INSTALL_AS_SERVICE="1"'>
+			<File Id="ServiceExecutable" Source="$(var.PublishDir)\scp.filestorage.exe" KeyPath="yes" />
+
+			<ServiceInstall
+			  Id="FscStorageServiceInstall"
+			  Type="ownProcess"
+			  Name="fsc-storage"
+			  DisplayName="!(loc.ProductName)"
+			  Description="!(loc.ServiceDescription)"
+			  Start="auto"
+			  ErrorControl="normal"
+			  Account="[SERVICEACCOUNT]"
+			  Password="[SERVICEPASSWORD]"
+			  Arguments="--base_dir &quot;[DATAFOLDER].&quot;">
+				<util:ServiceConfig
+				  FirstFailureActionType="restart"
+				  SecondFailureActionType="restart"
+				  ThirdFailureActionType="none"
+				  ResetPeriodInDays="1"
+				  RestartServiceDelayInSeconds="10" />
+			</ServiceInstall>
+
+			<ServiceControl
+			  Id="FscStorageServiceControl"
+			  Name="fsc-storage"
+			  Stop="both"
+			  Remove="uninstall"
+			  Wait="yes" />
+		</Component>
+
+		<!--
+      Starts the service only when the user requests it. If startup fails, the
+      standard MSI error dialog lets the user retry, ignore, or cancel.
+    -->
+		<Component Id="StartServiceComponent" Directory="INSTALLFOLDER" Guid="*" Condition='INSTALL_AS_SERVICE="1" AND START_SERVICE="1"'>
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="StartServiceComponent"
+			  Type="integer"
+			  Value="1"
+			  KeyPath="yes" />
+
+			<ServiceControl
+			  Id="FscStorageServiceStartControl"
+			  Name="fsc-storage"
+			  Start="install"
+			  Wait="yes" />
+		</Component>
+
+		<!--
+      Local Windows user FSC_USER is created only when the installer is configured
+      to run the service under a newly created local user account.
+    -->
+		<Component Id="FscStorageServiceUserComponent" Directory="INSTALLFOLDER" Guid="{8D7D44D9-6E0C-4C3E-8E69-B9AB358017EF}" Condition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"'>
+			<RegistryValue
+			  Root="HKLM"
+			  Key="Software\SCP\FSCStorage"
+			  Name="FscStorageServiceUserComponent"
+			  Type="integer"
+			  Value="1"
+			  KeyPath="yes" />
+
+			<util:User
+			  Id="FscStorageServiceUser"
+			  Name="[SERVICE_CREATE_USER]"
+			  Password="[SERVICE_CREATE_PASSWORD]"
+			  CreateUser="yes"
+			  UpdateIfExists="yes"
+			  LogonAsService="yes"
+			  RemoveOnUninstall="yes" />
+		</Component>
+	</Fragment>
+</Wix>

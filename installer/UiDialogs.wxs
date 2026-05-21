@@ -1,0 +1,772 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+	<Fragment>
+		<UI Id="FscStorageServiceUI">
+			<Dialog Id="UpgradeDetectedDlg"
+					Width="370"
+					Height="270"
+					Title="!(loc.ProductName)">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.UpgradeDetectedDlgTitle)" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.UpgradeDetectedDlgDescription)" />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="Body"
+						 Type="Text"
+						 X="25"
+						 Y="75"
+						 Width="320"
+						 Height="80"
+						 Text="!(loc.UpgradeDetectedDlgBody)" />
+
+				<Control Id="ActionLabel"
+						 Type="Text"
+						 X="25"
+						 Y="145"
+						 Width="320"
+						 Height="12"
+						 Text="!(loc.UpgradeDetectedDlgActionLabel)" />
+
+				<Control Id="UpgradeActionGroup"
+						 Type="RadioButtonGroup"
+						 X="35"
+						 Y="165"
+						 Width="285"
+						 Height="48"
+						 Property="UPGRADE_ACTION">
+					<RadioButtonGroup Property="UPGRADE_ACTION">
+						<RadioButton Value="UPGRADE"
+									 X="0"
+									 Y="0"
+									 Width="260"
+									 Height="17"
+									 Text="!(loc.UpgradeDetectedDlgUpgradeButton)" />
+
+						<RadioButton Value="REPAIR"
+									 X="0"
+									 Y="24"
+									 Width="260"
+									 Height="17"
+									 Text="!(loc.UpgradeDetectedDlgRepairButton)" />
+					</RadioButtonGroup>
+				</Control>
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)" />
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)" />
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="FscMaintenanceTypeDlg"
+					Width="370"
+					Height="270"
+					Title="!(loc.ProductName)">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.MaintenanceTypeDlgTitle)" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.MaintenanceTypeDlgDescription)" />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="RepairButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="72"
+						 Width="130"
+						 Height="20"
+						 Text="!(loc.MaintenanceTypeDlgRepairButton)" />
+
+				<Control Id="RepairText"
+						 Type="Text"
+						 X="180"
+						 Y="73"
+						 Width="160"
+						 Height="28"
+						 Text="!(loc.MaintenanceTypeDlgRepairText)" />
+
+				<Control Id="ChangeConfigButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="112"
+						 Width="130"
+						 Height="20"
+						 Text="!(loc.MaintenanceTypeDlgChangeConfigButton)" />
+
+				<Control Id="ChangeConfigText"
+						 Type="Text"
+						 X="180"
+						 Y="113"
+						 Width="160"
+						 Height="40"
+						 Text="!(loc.MaintenanceTypeDlgChangeConfigText)" />
+
+				<Control Id="RemoveButton"
+						 Type="PushButton"
+						 X="35"
+						 Y="164"
+						 Width="130"
+						 Height="20"
+						 Text="!(loc.MaintenanceTypeDlgRemoveButton)" />
+
+				<Control Id="RemoveText"
+						 Type="Text"
+						 X="180"
+						 Y="165"
+						 Width="160"
+						 Height="28"
+						 Text="!(loc.MaintenanceTypeDlgRemoveText)" />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)" />
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="DataDirDlg"
+					Width="370"
+					Height="270"
+					Title="!(loc.ProductName)">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.DataDirDlgTitle)" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="10"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.DataDirDlgDescription)" />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="DataFolderLabel"
+						 Type="Text"
+						 X="20"
+						 Y="72"
+						 Width="320"
+						 Height="30"
+						 Text="!(loc.DataDirDlgDataFolderLabel)" />
+
+				<Control Id="DataFolderEdit"
+						 Type="PathEdit"
+						 X="20"
+						 Y="110"
+						 Width="260"
+						 Height="18"
+						 Property="DATAFOLDER" />
+
+				<Control Id="DataFolderBrowse"
+						 Type="PushButton"
+						 X="286"
+						 Y="110"
+						 Width="56"
+						 Height="18"
+						 Text="!(loc.DataDirDlgBrowseButton)">
+					<Publish Property="_BrowseProperty" Value="DATAFOLDER" Order="1" />
+					<Publish Event="SpawnDialog" Value="BrowseDlg" Order="2" />
+				</Control>
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="FscMaintenanceTypeDlg" Order="1" Condition="CHANGE_CONFIG=&quot;1&quot;" />
+					<Publish Event="NewDialog" Value="InstallDirDlg" Order="2" Condition="CHANGE_CONFIG&lt;&gt;&quot;1&quot;" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+					<Publish Event="CheckTargetPath" Value="DATAFOLDER" Order="1" />
+					<Publish Event="SetTargetPath" Value="DATAFOLDER" Order="2" />
+					<Publish Event="NewDialog" Value="TransportDlg" Order="3" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="ServiceAccountDlg"
+					Width="370"
+					Height="270"
+					Title="!(loc.ProductName)">
+
+				<Control Id="BannerBitmap"
+						 Type="Bitmap"
+						 X="0"
+						 Y="0"
+						 Width="370"
+						 Height="44"
+						 TabSkip="no"
+						 Text="WixUI_Bmp_Banner" />
+
+				<Control Id="Title"
+						 Type="Text"
+						 X="15"
+						 Y="6"
+						 Width="340"
+						 Height="15"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.ServiceAccountDlgTitle)" />
+
+				<Control Id="Description"
+						 Type="Text"
+						 X="25"
+						 Y="23"
+						 Width="320"
+						 Height="15"
+						 Transparent="yes"
+						 NoPrefix="yes"
+						 Text="!(loc.ServiceAccountDlgDescription)" />
+
+				<Control Id="Line"
+						 Type="Line"
+						 X="0"
+						 Y="44"
+						 Width="370"
+						 Height="0" />
+
+				<Control Id="InstallAsService"
+						 Type="CheckBox"
+						 X="20"
+						 Y="60"
+						 Width="330"
+						 Height="17"
+						 Property="INSTALL_AS_SERVICE"
+						 CheckBoxValue="1"
+						 Text="!(loc.ServiceAccountDlgInstallAsService)" />
+
+				<Control Id="StartService"
+						 Type="CheckBox"
+						 X="35"
+						 Y="85"
+						 Width="300"
+						 Height="17"
+						 Property="START_SERVICE"
+						 CheckBoxValue="1"
+						 Text="!(loc.ServiceAccountDlgStartService)"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
+				<Control Id="ServiceModeGroup"
+						 Type="RadioButtonGroup"
+						 X="35"
+						 Y="110"
+						 Width="180"
+						 Height="75"
+						 Property="SERVICE_ACCOUNT_MODE"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"'>
+					<RadioButtonGroup Property="SERVICE_ACCOUNT_MODE">
+						<RadioButton Value="SYSTEM"
+									 X="0"
+									 Y="0"
+									 Width="170"
+									 Height="17"
+									 Text="!(loc.ServiceAccountModeSystem)" />
+
+						<RadioButton Value="EXISTING"
+									 X="0"
+									 Y="22"
+									 Width="170"
+									 Height="17"
+									 Text="!(loc.ServiceAccountModeExisting)" />
+
+						<RadioButton Value="CREATE"
+									 X="0"
+									 Y="44"
+									 Width="170"
+									 Height="17"
+									 Text="!(loc.ServiceAccountModeCreate)" />
+					</RadioButtonGroup>
+				</Control>
+
+				<Control Id="ExistingUserEdit"
+						 Type="Edit"
+						 X="215"
+						 Y="132"
+						 Width="120"
+						 Height="18"
+						 Property="SERVICE_EXISTING_USER"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"EXISTING"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="EXISTING"' />
+
+				<Control Id="PasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="180"
+						 Width="110"
+						 Height="15"
+						 Text="!(loc.ServiceAccountDlgPasswordLabel)"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE="SYSTEM"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE&lt;&gt;"SYSTEM"' />
+
+				<Control Id="PasswordEditExisting"
+						 Type="Edit"
+						 X="150"
+						 Y="177"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_EXISTING_PASSWORD"
+						 Password="yes"
+						 HideCondition='SERVICE_ACCOUNT_MODE&lt;&gt;"EXISTING"'
+						 ShowCondition='SERVICE_ACCOUNT_MODE="EXISTING"'
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
+				<Control Id="PasswordEditCreate"
+						 Type="Edit"
+						 X="150"
+						 Y="177"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_CREATE_PASSWORD"
+						 Password="yes"
+						 HideCondition='SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 ShowCondition='SERVICE_ACCOUNT_MODE="CREATE"'
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1"'
+						 EnableCondition='INSTALL_AS_SERVICE="1"' />
+
+				<Control Id="ConfirmPasswordLabel"
+						 Type="Text"
+						 X="35"
+						 Y="207"
+						 Width="110"
+						 Height="15"
+						 Text="!(loc.ServiceAccountDlgConfirmPasswordLabel)"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"' />
+
+				<Control Id="ConfirmPasswordEdit"
+						 Type="Edit"
+						 X="150"
+						 Y="204"
+						 Width="185"
+						 Height="18"
+						 Property="SERVICE_CREATE_PASSWORD_CONFIRM"
+						 Password="yes"
+						 DisableCondition='INSTALL_AS_SERVICE&lt;&gt;"1" OR SERVICE_ACCOUNT_MODE&lt;&gt;"CREATE"'
+						 EnableCondition='INSTALL_AS_SERVICE="1" AND SERVICE_ACCOUNT_MODE="CREATE"' />
+
+				<Control Id="Back"
+						 Type="PushButton"
+						 X="180"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Text="!(loc.WixUIBack)">
+					<Publish Event="NewDialog" Value="TransportDlg" />
+				</Control>
+
+				<Control Id="Next"
+						 Type="PushButton"
+						 X="236"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Text="!(loc.WixUINext)">
+
+					<!-- Service is not installed. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="LocalSystem"
+							 Order="1"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Order="2"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+
+					<!-- LocalSystem. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="LocalSystem"
+							 Order="3"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Order="4"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+
+					<!-- Existing user. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value="[SERVICE_EXISTING_USER]"
+							 Order="5"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Value="[SERVICE_EXISTING_PASSWORD]"
+							 Order="6"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot;" />
+
+					<!-- Create local FSC_USER. -->
+					<Publish Property="SERVICEACCOUNT"
+							 Value=".\FSC_USER"
+							 Order="7"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot;" />
+					<Publish Property="SERVICEPASSWORD"
+							 Value="[SERVICE_CREATE_PASSWORD]"
+							 Order="8"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot;" />
+
+					<!-- Validation dialogs. -->
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServiceAccountDlg"
+							 Order="20"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_USER=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordDlg"
+							 Order="21"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordDlg"
+							 Order="22"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD=&quot;&quot;" />
+
+					<Publish Event="SpawnDialog"
+							 Value="InvalidServicePasswordConfirmDlg"
+							 Order="23"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD&lt;&gt;SERVICE_CREATE_PASSWORD_CONFIRM" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="30"
+							 Condition="INSTALL_AS_SERVICE&lt;&gt;&quot;1&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="31"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;SYSTEM&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="32"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;EXISTING&quot; AND SERVICE_EXISTING_USER&lt;&gt;&quot;&quot; AND SERVICE_EXISTING_PASSWORD&lt;&gt;&quot;&quot;" />
+
+					<Publish Event="NewDialog"
+							 Value="VerifyReadyDlg"
+							 Order="33"
+							 Condition="INSTALL_AS_SERVICE=&quot;1&quot; AND SERVICE_ACCOUNT_MODE=&quot;CREATE&quot; AND SERVICE_CREATE_PASSWORD&lt;&gt;&quot;&quot; AND SERVICE_CREATE_PASSWORD=SERVICE_CREATE_PASSWORD_CONFIRM" />
+				</Control>
+
+				<Control Id="Cancel"
+						 Type="PushButton"
+						 X="304"
+						 Y="243"
+						 Width="56"
+						 Height="17"
+						 Cancel="yes"
+						 Text="!(loc.WixUICancel)">
+					<Publish Event="SpawnDialog" Value="CancelDlg" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServiceAccountDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidServiceAccountDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidExistingPfxPathDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidExistingPfxPathDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidExistingPfxPasswordDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidExistingPfxPasswordDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidSelfSignedNamesDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidSelfSignedNamesDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidSelfSignedPasswordDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidSelfSignedPasswordDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServicePasswordDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidServicePasswordDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+
+			<Dialog Id="InvalidServicePasswordConfirmDlg"
+					Width="260"
+					Height="85"
+					Title="!(loc.ProductName)">
+				<Control Id="Text"
+						 Type="Text"
+						 X="15"
+						 Y="15"
+						 Width="230"
+						 Height="30"
+						 Text="!(loc.InvalidServicePasswordConfirmDlgText)" />
+				<Control Id="Ok"
+						 Type="PushButton"
+						 X="102"
+						 Y="57"
+						 Width="56"
+						 Height="17"
+						 Default="yes"
+						 Cancel="yes"
+						 Text="!(loc.OkButton)">
+					<Publish Event="EndDialog" Value="Return" />
+				</Control>
+			</Dialog>
+		</UI>
+	</Fragment>
+</Wix>
