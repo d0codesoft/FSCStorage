@@ -1,3 +1,10 @@
+<h1 align="center">
+
+<img src="./scp.filestorage.webui/wwwroot/splash.png" alt="Simple FileStorage Service" width="256"/>
+<br/>
+FSC Storage Service
+</h1>
+
 # FSC Storage Service
 
 FSC Storage is a simple HTTP service for storing files and deleting them by identifiers. It accepts uploaded files, saves the binary content on disk, keeps file metadata in a local SQLite database, and returns stable file identifiers that clients can use later to download, inspect, list, or delete files.
