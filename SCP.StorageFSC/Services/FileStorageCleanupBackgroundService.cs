@@ -1,22 +1,22 @@
-using Microsoft.Extensions.Options;
 using scp.filestorage.Data.Repositories;
 using SCP.StorageFSC.Data.Repositories;
+using SCP.StorageFSC.Services;
 
 namespace scp.filestorage.Services
 {
     public sealed class FileStorageCleanupBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly IOptionsMonitor<FileStorageCleanupOptions> _options;
+        private readonly SystemSettingsRuntimeOptions _runtimeOptions;
         private readonly ILogger<FileStorageCleanupBackgroundService> _logger;
 
         public FileStorageCleanupBackgroundService(
             IServiceScopeFactory scopeFactory,
-            IOptionsMonitor<FileStorageCleanupOptions> options,
+            SystemSettingsRuntimeOptions runtimeOptions,
             ILogger<FileStorageCleanupBackgroundService> logger)
         {
             _scopeFactory = scopeFactory;
-            _options = options;
+            _runtimeOptions = runtimeOptions;
             _logger = logger;
         }
 
@@ -24,7 +24,7 @@ namespace scp.filestorage.Services
         {
             try
             {
-                var initialDelay = NormalizeDelay(_options.CurrentValue.InitialDelay, TimeSpan.Zero);
+                var initialDelay = NormalizeDelay(_runtimeOptions.Cleanup.InitialDelay, TimeSpan.Zero);
                 if (initialDelay > TimeSpan.Zero)
                     await Task.Delay(initialDelay, stoppingToken);
 
@@ -43,7 +43,7 @@ namespace scp.filestorage.Services
                         _logger.LogError(ex, "File storage cleanup failed.");
                     }
 
-                    var interval = NormalizeDelay(_options.CurrentValue.Interval, TimeSpan.FromDays(1));
+                    var interval = NormalizeDelay(_runtimeOptions.Cleanup.Interval, TimeSpan.FromDays(1));
                     await Task.Delay(interval, stoppingToken);
                 }
             }
@@ -54,7 +54,7 @@ namespace scp.filestorage.Services
 
         private async Task RunCleanupAsync(CancellationToken cancellationToken)
         {
-            var options = _options.CurrentValue;
+            var options = _runtimeOptions.Cleanup;
             if (!options.Enabled)
             {
                 _logger.LogDebug("File storage cleanup is disabled.");

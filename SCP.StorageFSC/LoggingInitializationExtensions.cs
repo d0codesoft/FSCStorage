@@ -1,4 +1,5 @@
 using Serilog;
+using Serilog.Core;
 
 namespace SCP.StorageFSC;
 
@@ -21,8 +22,10 @@ public static class LoggingInitializationExtensions
             Directory.CreateDirectory(applicationPaths.LogsPath);
 
             var logFilePath = Path.Combine(applicationPaths.LogsPath, "app-.log");
+            var levelSwitch = services.GetRequiredService<LoggingLevelSwitch>();
 
             loggerConfiguration
+                .MinimumLevel.ControlledBy(levelSwitch)
                 .ReadFrom.Configuration(context.Configuration)
                 .ReadFrom.Services(services)
                 .Enrich.FromLogContext()

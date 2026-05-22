@@ -18,6 +18,7 @@ namespace SCP.StorageFSC.Services
         private readonly ICurrentTenantAccessor _currentTenantAccessor;
         private readonly ITenantAuthorizationService _tenantAuthorizationService;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
+        private readonly FileTransferLimiter _transferLimiter;
         private readonly ApplicationPaths _options;
         private readonly ILogger<FileStorageService> _logger;
 
@@ -27,6 +28,7 @@ namespace SCP.StorageFSC.Services
             ICurrentTenantAccessor currentTenantAccessor,
             ITenantAuthorizationService tenantAuthorizationService,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
+            FileTransferLimiter transferLimiter,
             ApplicationPaths options,
             ILogger<FileStorageService> logger)
         {
@@ -35,6 +37,7 @@ namespace SCP.StorageFSC.Services
             _currentTenantAccessor = currentTenantAccessor;
             _tenantAuthorizationService = tenantAuthorizationService;
             _backgroundTaskQueue = backgroundTaskQueue;
+            _transferLimiter = transferLimiter;
             _options = options;
             _logger = logger;
         }
@@ -333,18 +336,29 @@ namespace SCP.StorageFSC.Services
                 return null;
             }
 
-            var stream = new FileStream(
-                fullPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 64 * 1024,
-                useAsync: true);
+            var slot = await _transferLimiter.AcquireDownloadSlotAsync(cancellationToken);
+            Stream stream;
+
+            try
+            {
+                stream = new FileStream(
+                    fullPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 64 * 1024,
+                    useAsync: true);
+            }
+            catch
+            {
+                await slot.DisposeAsync();
+                throw;
+            }
 
             return new FileContentResult
             {
                 File = Map(tenantFile, storedFile),
-                Content = stream
+                Content = new RateLimitedReadStream(stream, _transferLimiter, slot)
             };
         }
 
@@ -542,12 +556,13 @@ namespace SCP.StorageFSC.Services
             return detectedContentType.ContentType;
         }
 
-        private static async Task SaveToTempAsync(
+        private async Task SaveToTempAsync(
                 Stream input,
                 string tempPath,
                 CancellationToken cancellationToken)
         {
             var buffer = new byte[1024 * 1024]; // 1 MB лучше для больших файлов
+            await using var slot = await _transferLimiter.AcquireUploadSlotAsync(cancellationToken);
 
             await using (var output = new FileStream(
                 tempPath,
@@ -565,6 +580,7 @@ namespace SCP.StorageFSC.Services
 
                     var chunk = buffer.AsMemory(0, read);
 
+                    await _transferLimiter.WaitUploadSpeedAsync(read, cancellationToken);
                     await output.WriteAsync(chunk, cancellationToken);
                 }
 

@@ -216,6 +216,50 @@ namespace scp.filestorage.webui.Services
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
+        public async Task<IReadOnlyList<SystemSettingViewModel>> GetSystemSettingsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync("ui-api/system-settings", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<SystemSettingViewModel>>(
+                cancellationToken: cancellationToken)
+                ?? [];
+        }
+
+        public async Task<SystemSettingViewModel?> GetSystemSettingAsync(
+            string name,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync(
+                $"ui-api/system-settings/{Uri.EscapeDataString(name)}",
+                cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return null;
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<SystemSettingViewModel>(
+                cancellationToken: cancellationToken);
+        }
+
+        public async Task<SystemSettingViewModel> UpdateSystemSettingAsync(
+            string name,
+            UpdateSystemSettingRequestModel request,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PutAsJsonAsync(
+                $"ui-api/system-settings/{Uri.EscapeDataString(name)}",
+                request,
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return (await response.Content.ReadFromJsonAsync<SystemSettingViewModel>(
+                cancellationToken: cancellationToken))!;
+        }
+
         private async Task<IReadOnlyList<BackgroundTaskViewModel>> GetBackgroundTasksAsync(
             string url,
             CancellationToken cancellationToken)

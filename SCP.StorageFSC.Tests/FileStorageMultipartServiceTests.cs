@@ -5,6 +5,7 @@ using scp.filestorage.Data.Models;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.Services;
 using SCP.StorageFSC;
+using SCP.StorageFSC.Services;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -170,18 +171,29 @@ public sealed class FileStorageMultipartServiceTests : IDisposable
 
     private FileStorageMultipartService CreateService()
     {
+        var runtimeOptions = new SystemSettingsRuntimeOptions();
+        runtimeOptions.UpdateMultipart(new MultipartSettingOptions
+        {
+            MinPartSizeBytes = 1,
+            MaxPartSizeBytes = 10
+        });
+
         return new FileStorageMultipartService(
             _sessions,
             _parts,
             _queue,
+            CreateTransferLimiter(),
+            runtimeOptions,
             CreateApplicationPaths(),
-            Options.Create(new MultipartSettingOptions
-            {
-                MinPartSizeBytes = 1,
-                MaxPartSizeBytes = 10
-            }),
             NullLogger<FileStorageMultipartService>.Instance);
     }
+
+    private static FileTransferLimiter CreateTransferLimiter() =>
+        new(
+            maxConcurrentUploads: 4,
+            maxConcurrentDownloads: 20,
+            uploadBytesPerSecond: 50L * 1024 * 1024,
+            downloadBytesPerSecond: 100L * 1024 * 1024);
 
     private MultipartUploadBackgroundTaskProcessor CreateProcessor()
     {

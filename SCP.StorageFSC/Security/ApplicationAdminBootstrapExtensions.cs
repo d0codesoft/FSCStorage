@@ -4,6 +4,7 @@ using scp.filestorage.Security;
 using scp.filestorage.Services.Auth;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace SCP.StorageFSC.Security
@@ -61,7 +62,7 @@ namespace SCP.StorageFSC.Security
 
                 if (string.IsNullOrWhiteSpace(config.Password))
                 {
-                    config.Password = StrongTokenGenerator.GenerateStrong(16, true, true, true, true, "*&%$#@");
+                    config.Password = StrongTokenGenerator.GenerateStrong(16, true, true, true, true, "*%$#@");
                     configChanged = true;
                 }
             }
@@ -73,7 +74,7 @@ namespace SCP.StorageFSC.Security
                 {
                     Name = "Administrator",
                     Key = TokenHashHelper.GenerateToken(),
-                    Password = StrongTokenGenerator.GenerateStrong(16, true, true, true, true,"*&%$#@")
+                    Password = StrongTokenGenerator.GenerateStrong(16, true, true, true, true,"*%$#@")
                 };
 
                 configChanged = true;
@@ -83,7 +84,8 @@ namespace SCP.StorageFSC.Security
             {
                 var json = JsonSerializer.Serialize(config, new JsonSerializerOptions
                 {
-                    WriteIndented = true
+                    WriteIndented = true,
+                    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 });
 
                 await File.WriteAllTextAsync(configPath, json, cancellationToken);

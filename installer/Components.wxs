@@ -35,7 +35,8 @@
 			<util:RemoveFolderEx
 			  Id="RemoveInstallFolderTree"
 			  On="uninstall"
-			  Property="INSTALLFOLDER" />
+			  Property="INSTALLFOLDER"
+			  Condition='REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE' />
 		</Component>
 
 		<Component Id="InstallerToolComponent" Directory="INSTALLFOLDER" Guid="*">

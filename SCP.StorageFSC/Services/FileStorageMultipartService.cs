@@ -1,10 +1,10 @@
-using Microsoft.Extensions.Options;
 using scp.filestorage.Common;
 using scp.filestorage.Data.Dto;
 using scp.filestorage.Data.Models;
 using scp.filestorage.Data.Repositories;
 using scp.filestorage.InterfacesService;
 using SCP.StorageFSC;
+using SCP.StorageFSC.Services;
 using System.Security.Cryptography;
 
 namespace scp.filestorage.Services
@@ -14,23 +14,26 @@ namespace scp.filestorage.Services
         private readonly IMultipartUploadSessionRepository _sessionRepository;
         private readonly IMultipartUploadPartRepository _partRepository;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
+        private readonly FileTransferLimiter _transferLimiter;
         private readonly ApplicationPaths _applicationPaths;
-        private readonly MultipartSettingOptions _options;
+        private readonly SystemSettingsRuntimeOptions _runtimeOptions;
         private readonly ILogger<FileStorageMultipartService> _logger;
 
         public FileStorageMultipartService(
             IMultipartUploadSessionRepository sessionRepository,
             IMultipartUploadPartRepository partRepository,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
+            FileTransferLimiter transferLimiter,
+            SystemSettingsRuntimeOptions runtimeOptions,
             ApplicationPaths applicationPaths,
-            IOptions<MultipartSettingOptions> options,
             ILogger<FileStorageMultipartService> logger)
         {
             _sessionRepository = sessionRepository;
             _partRepository = partRepository;
             _backgroundTaskQueue = backgroundTaskQueue;
+            _transferLimiter = transferLimiter;
+            _runtimeOptions = runtimeOptions;
             _applicationPaths = applicationPaths;
-            _options = options.Value;
             _logger = logger;
         }
 
@@ -44,11 +47,13 @@ namespace scp.filestorage.Services
             if (request.FileSize <= 0)
                 throw new ArgumentException("FileSize must be greater than 0.", nameof(request.FileSize));
 
-            if (request.PartSize < _options.MinPartSizeBytes)
-                throw new ArgumentException($"PartSize must be >= {_options.MinPartSizeBytes} bytes.", nameof(request.PartSize));
+            var options = _runtimeOptions.Multipart;
 
-            if (request.PartSize > _options.MaxPartSizeBytes)
-                throw new ArgumentException($"PartSize must be <= {_options.MaxPartSizeBytes} bytes.", nameof(request.PartSize));
+            if (request.PartSize < options.MinPartSizeBytes)
+                throw new ArgumentException($"PartSize must be >= {options.MinPartSizeBytes} bytes.", nameof(request.PartSize));
+
+            if (request.PartSize > options.MaxPartSizeBytes)
+                throw new ArgumentException($"PartSize must be <= {options.MaxPartSizeBytes} bytes.", nameof(request.PartSize));
 
             if (request.TenantId == Guid.Empty)
                 throw new ArgumentException("TenantId is required.", nameof(request.TenantId));
@@ -150,6 +155,7 @@ namespace scp.filestorage.Services
 
             string? checksum = null;
             var uploadedAtUtc = DateTime.UtcNow;
+            await using var slot = await _transferLimiter.AcquireUploadSlotAsync(cancellationToken);
 
             await using (var output = new FileStream(
                              partPath,
@@ -169,6 +175,7 @@ namespace scp.filestorage.Services
                     if (read == 0)
                         break;
 
+                    await _transferLimiter.WaitUploadSpeedAsync(read, cancellationToken);
                     await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
                     sha256.TransformBlock(buffer, 0, read, null, 0);
                     written += read;

@@ -1,4 +1,5 @@
 using scp.filestorage.Data.Handlers;
+using SCP.StorageFSC.InterfacesService;
 
 namespace SCP.StorageFSC.Data
 {
@@ -39,6 +40,19 @@ namespace SCP.StorageFSC.Data
                 logger.LogCritical(ex, "Database initialization failed.");
                 throw;
             }
+
+            return app;
+        }
+
+        public static async Task<WebApplication> LoadSystemSettingsAsync(
+            this WebApplication app,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(app);
+
+            using var scope = app.Services.CreateScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<ISystemSettingsService>();
+            await settingsService.LoadFileTransferLimiterSettingsAsync(cancellationToken);
 
             return app;
         }

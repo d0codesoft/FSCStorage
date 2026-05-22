@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using scp.filestorage.Services;
+using SCP.StorageFSC.Services;
 
 namespace SCP.StorageFSC.Tests;
 
@@ -12,7 +12,8 @@ public sealed class FileStorageCleanupBackgroundServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        var options = new TestOptionsMonitor(new FileStorageCleanupOptions
+        var runtimeOptions = new SystemSettingsRuntimeOptions();
+        runtimeOptions.UpdateCleanup(new FileStorageCleanupOptions
         {
             Enabled = false,
             InitialDelay = TimeSpan.Zero,
@@ -21,7 +22,7 @@ public sealed class FileStorageCleanupBackgroundServiceTests
 
         using var service = new FileStorageCleanupBackgroundService(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            options,
+            runtimeOptions,
             NullLogger<FileStorageCleanupBackgroundService>.Instance);
 
         await service.StartAsync(cancellationToken);
@@ -30,25 +31,5 @@ public sealed class FileStorageCleanupBackgroundServiceTests
 
         Assert.False(service.ExecuteTask?.IsFaulted);
         Assert.False(service.ExecuteTask?.IsCanceled);
-    }
-
-    private sealed class TestOptionsMonitor : IOptionsMonitor<FileStorageCleanupOptions>
-    {
-        public TestOptionsMonitor(FileStorageCleanupOptions currentValue)
-        {
-            CurrentValue = currentValue;
-        }
-
-        public FileStorageCleanupOptions CurrentValue { get; }
-
-        public FileStorageCleanupOptions Get(string? name)
-        {
-            return CurrentValue;
-        }
-
-        public IDisposable? OnChange(Action<FileStorageCleanupOptions, string?> listener)
-        {
-            return null;
-        }
     }
 }

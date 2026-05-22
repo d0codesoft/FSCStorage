@@ -39,6 +39,9 @@ namespace SCP.StorageFSC.Data
             {
                 var _schemaRole = new DbSchemaRole();
                 await _schemaRole.ApplyAsync(connection, null, _logger, cancellationToken);
+
+                var schemaSetting = new DbSchemaSetting();
+                await schemaSetting.ApplyAsync(connection, null, _logger, cancellationToken);
             }
             catch (Exception ex)
             {

@@ -222,6 +222,7 @@ public sealed class FileStorageServiceTests : IDisposable
             _currentTenant,
             _authorization,
             _backgroundTaskQueue,
+            CreateTransferLimiter(),
             new ApplicationPaths()
             {
                 BasePath = _dataPath,
@@ -231,6 +232,13 @@ public sealed class FileStorageServiceTests : IDisposable
             },
             NullLogger<FileStorageService>.Instance);
     }
+
+    private static FileTransferLimiter CreateTransferLimiter() =>
+        new(
+            maxConcurrentUploads: 4,
+            maxConcurrentDownloads: 20,
+            uploadBytesPerSecond: 50L * 1024 * 1024,
+            downloadBytesPerSecond: 100L * 1024 * 1024);
 
     private sealed class TestFileStorageBackgroundTaskQueue : IFileStorageBackgroundTaskQueue
     {

@@ -1,0 +1,293 @@
+@page "/settings"
+@attribute [Authorize(Roles = "Admin")]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+
+<PageTitle>System settings</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>System settings</h1>
+        <p>Runtime limits, cleanup cadence, multipart upload bounds, and logging.</p>
+    </div>
+    <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+</div>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (isBusy && settings.Count == 0)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else
+{
+    <section class="data-section">
+        <RadzenCard class="details-panel">
+            <div class="details-header">
+                <h2>Runtime settings</h2>
+                <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="Applied immediately" />
+            </div>
+
+            <EditForm Model="@editor" OnValidSubmit="@SaveAsync">
+                <DataAnnotationsValidator />
+                <h3>File transfer limiter</h3>
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="max-upload">Max concurrent uploads</label>
+                        <RadzenNumeric id="max-upload" TValue="int" Min="1" @bind-Value="editor.MaxConcurrentUploads" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.MaxConcurrentUploads)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="max-download">Max concurrent downloads</label>
+                        <RadzenNumeric id="max-download" TValue="int" Min="1" @bind-Value="editor.MaxConcurrentDownloads" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.MaxConcurrentDownloads)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="upload-speed">Upload speed, MB/s</label>
+                        <RadzenNumeric id="upload-speed" TValue="long" Min="1" @bind-Value="editor.UploadMegabytesPerSecond" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.UploadMegabytesPerSecond)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="download-speed">Download speed, MB/s</label>
+                        <RadzenNumeric id="download-speed" TValue="long" Min="1" @bind-Value="editor.DownloadMegabytesPerSecond" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.DownloadMegabytesPerSecond)" />
+                    </div>
+                </div>
+
+                <h3>Multipart upload</h3>
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="min-part-size">Min part size, MB</label>
+                        <RadzenNumeric id="min-part-size" TValue="long" Min="1" @bind-Value="editor.MinPartSizeMegabytes" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.MinPartSizeMegabytes)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="max-part-size">Max part size, MB</label>
+                        <RadzenNumeric id="max-part-size" TValue="long" Min="1" @bind-Value="editor.MaxPartSizeMegabytes" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.MaxPartSizeMegabytes)" />
+                    </div>
+                </div>
+
+                <h3>File storage cleanup</h3>
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="cleanup-enabled">Cleanup enabled</label>
+                        <RadzenSwitch id="cleanup-enabled" @bind-Value="editor.CleanupEnabled" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="task-retention">Completed task retention, days</label>
+                        <RadzenNumeric id="task-retention" TValue="int" Min="1" @bind-Value="editor.CompletedTaskRetentionDays" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.CompletedTaskRetentionDays)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="multipart-retention">Multipart session retention, days</label>
+                        <RadzenNumeric id="multipart-retention" TValue="int" Min="1" @bind-Value="editor.MultipartUploadSessionRetentionDays" Style="width:100%" />
+                        <ValidationMessage For="@(() => editor.MultipartUploadSessionRetentionDays)" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="initial-delay">Initial delay</label>
+                        <RadzenTextBox id="initial-delay" @bind-Value="editor.InitialDelay" Style="width:100%" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="cleanup-interval">Interval</label>
+                        <RadzenTextBox id="cleanup-interval" @bind-Value="editor.Interval" Style="width:100%" />
+                    </div>
+                </div>
+
+                <h3>Logging</h3>
+                <div class="admin-form-grid">
+                    <div>
+                        <label class="form-label" for="log-level">Default log level</label>
+                        <RadzenDropDown id="log-level" Data="@LogLevels" @bind-Value="editor.LogLevelDefault" Style="width:100%" />
+                    </div>
+                </div>
+
+                <div class="button-row">
+                    <RadzenButton ButtonType="ButtonType.Submit" Text="Save settings" Icon="save" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+                </div>
+            </EditForm>
+        </RadzenCard>
+    </section>
+
+    <section class="data-section">
+        <h2>Stored values</h2>
+        <RadzenDataGrid Data="@settings" TItem="SystemSettingViewModel" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="SystemSettingViewModel" Title="Name" Property="Name">
+                    <Template Context="setting">
+                        <div class="primary-cell">@setting.Name</div>
+                        <div class="secondary-cell">@setting.Description</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SystemSettingViewModel" Title="Value" Property="Value">
+                    <Template Context="setting">@FormatValue(setting)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="SystemSettingViewModel" Title="Updated UTC" Property="UpdatedUtc">
+                    <Template Context="setting">@FormatUtc(setting.UpdatedUtc ?? setting.CreatedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </section>
+}
+
+@code {
+    private const string MaxConcurrentUploadsName = "FileTransferLimiter.MaxConcurrentUploads";
+    private const string MaxConcurrentDownloadsName = "FileTransferLimiter.MaxConcurrentDownloads";
+    private const string UploadBytesPerSecondName = "FileTransferLimiter.UploadBytesPerSecond";
+    private const string DownloadBytesPerSecondName = "FileTransferLimiter.DownloadBytesPerSecond";
+    private const string MultipartMinPartSizeBytesName = "MultipartSetting.MinPartSizeBytes";
+    private const string MultipartMaxPartSizeBytesName = "MultipartSetting.MaxPartSizeBytes";
+    private const string CleanupEnabledName = "FileStorageCleanup.Enabled";
+    private const string CleanupCompletedTaskRetentionDaysName = "FileStorageCleanup.CompletedTaskRetentionDays";
+    private const string CleanupMultipartUploadSessionRetentionDaysName = "FileStorageCleanup.MultipartUploadSessionRetentionDays";
+    private const string CleanupInitialDelayName = "FileStorageCleanup.InitialDelay";
+    private const string CleanupIntervalName = "FileStorageCleanup.Interval";
+    private const string LoggingLogLevelDefaultName = "Logging.LogLevel.Default";
+    private const long Megabyte = 1024L * 1024L;
+    private readonly string[] LogLevels = ["Verbose", "Debug", "Information", "Warning", "Error", "Fatal"];
+
+    private readonly FileTransferSettingsEditorModel editor = new();
+    private IReadOnlyList<SystemSettingViewModel> settings = [];
+    private bool isBusy;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            settings = await ApiClient.GetSystemSettingsAsync();
+            editor.MaxConcurrentUploads = ReadInt(MaxConcurrentUploadsName, 4);
+            editor.MaxConcurrentDownloads = ReadInt(MaxConcurrentDownloadsName, 20);
+            editor.UploadMegabytesPerSecond = ReadLong(UploadBytesPerSecondName, 50L * Megabyte) / Megabyte;
+            editor.DownloadMegabytesPerSecond = ReadLong(DownloadBytesPerSecondName, 100L * Megabyte) / Megabyte;
+            editor.MinPartSizeMegabytes = ReadLong(MultipartMinPartSizeBytesName, 5L * Megabyte) / Megabyte;
+            editor.MaxPartSizeMegabytes = ReadLong(MultipartMaxPartSizeBytesName, 100L * Megabyte) / Megabyte;
+            editor.CleanupEnabled = ReadBool(CleanupEnabledName, true);
+            editor.CompletedTaskRetentionDays = ReadInt(CleanupCompletedTaskRetentionDaysName, 30);
+            editor.MultipartUploadSessionRetentionDays = ReadInt(CleanupMultipartUploadSessionRetentionDaysName, 30);
+            editor.InitialDelay = ReadString(CleanupInitialDelayName, "00:05:00");
+            editor.Interval = ReadString(CleanupIntervalName, "1.00:00:00");
+            editor.LogLevelDefault = ReadString(LoggingLogLevelDefaultName, "Debug");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await SaveSettingAsync(MaxConcurrentUploadsName, editor.MaxConcurrentUploads);
+            await SaveSettingAsync(MaxConcurrentDownloadsName, editor.MaxConcurrentDownloads);
+            await SaveSettingAsync(UploadBytesPerSecondName, checked(editor.UploadMegabytesPerSecond * Megabyte));
+            await SaveSettingAsync(DownloadBytesPerSecondName, checked(editor.DownloadMegabytesPerSecond * Megabyte));
+            await SaveSettingAsync(MultipartMinPartSizeBytesName, checked(editor.MinPartSizeMegabytes * Megabyte));
+            await SaveSettingAsync(MultipartMaxPartSizeBytesName, checked(editor.MaxPartSizeMegabytes * Megabyte));
+            await SaveSettingAsync(CleanupEnabledName, editor.CleanupEnabled.ToString().ToLowerInvariant());
+            await SaveSettingAsync(CleanupCompletedTaskRetentionDaysName, editor.CompletedTaskRetentionDays);
+            await SaveSettingAsync(CleanupMultipartUploadSessionRetentionDaysName, editor.MultipartUploadSessionRetentionDays);
+            await SaveSettingAsync(CleanupInitialDelayName, editor.InitialDelay);
+            await SaveSettingAsync(CleanupIntervalName, editor.Interval);
+            await SaveSettingAsync(LoggingLogLevelDefaultName, editor.LogLevelDefault);
+
+            settings = await ApiClient.GetSystemSettingsAsync();
+            statusMessage = "System settings saved.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private Task SaveSettingAsync(string name, long value)
+    {
+        return SaveSettingAsync(name, value.ToString());
+    }
+
+    private Task SaveSettingAsync(string name, string value)
+    {
+        return ApiClient.UpdateSystemSettingAsync(
+            name,
+            new UpdateSystemSettingRequestModel { Value = value });
+    }
+
+    private int ReadInt(string name, int defaultValue)
+    {
+        var value = settings.FirstOrDefault(setting => setting.Name == name)?.Value;
+        return int.TryParse(value, out var parsed) ? parsed : defaultValue;
+    }
+
+    private long ReadLong(string name, long defaultValue)
+    {
+        var value = settings.FirstOrDefault(setting => setting.Name == name)?.Value;
+        return long.TryParse(value, out var parsed) ? parsed : defaultValue;
+    }
+
+    private bool ReadBool(string name, bool defaultValue)
+    {
+        var value = settings.FirstOrDefault(setting => setting.Name == name)?.Value;
+        return bool.TryParse(value, out var parsed) ? parsed : defaultValue;
+    }
+
+    private string ReadString(string name, string defaultValue)
+    {
+        return settings.FirstOrDefault(setting => setting.Name == name)?.Value ?? defaultValue;
+    }
+
+    private static string FormatValue(SystemSettingViewModel setting)
+    {
+        if (setting.Name.EndsWith("BytesPerSecond", StringComparison.OrdinalIgnoreCase) &&
+            long.TryParse(setting.Value, out var bytesPerSecond))
+        {
+            return $"{bytesPerSecond / Megabyte} MB/s";
+        }
+
+        if (setting.Name.EndsWith("PartSizeBytes", StringComparison.OrdinalIgnoreCase) &&
+            long.TryParse(setting.Value, out var partSize))
+        {
+            return $"{partSize / Megabyte} MB";
+        }
+
+        return setting.Value;
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+}

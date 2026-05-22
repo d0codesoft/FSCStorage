@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using scp.filestorage;
 using scp.filestorage.Data.Dto;
@@ -14,6 +15,8 @@ using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
 using SCP.StorageFSC.SecurityPermission;
 using SCP.StorageFSC.Services;
+using Serilog.Core;
+using Serilog.Events;
 
 // Get parameters from command line arguments
 program_utils.ParseArguments(args);
@@ -66,6 +69,7 @@ else
 }
 
 builder.Services.RegisterDatabase();
+builder.Services.AddSingleton(new LoggingLevelSwitch(LogEventLevel.Debug));
 
 // Initialize directory paths
 var applicationPaths = ApplicationPaths.FromConfiguration(builder.Configuration, baseDirPath);
@@ -109,6 +113,7 @@ builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRe
 builder.Services.AddScoped<IBackgroundTaskRepository, BackgroundTaskRepository>();
 builder.Services.AddScoped<IStorageStatisticsRepository, StorageStatisticsRepository>();
 builder.Services.AddScoped<IDeletedTenantRepository, DeletedTenantRepository>();
+builder.Services.AddScoped<ISystemSettingRepository, SystemSettingRepository>();
 builder.Services.AddScoped<IDeletedTenantCleanupService, DeletedTenantCleanupService>();
 
 builder.Services.AddUserManagementRepositories();
@@ -135,10 +140,18 @@ builder.Services.Configure<MultipartSettingOptions>(
 builder.Services.Configure<FileStorageCleanupOptions>(
     builder.Configuration.GetSection("FileStorageCleanup"));
 
+builder.Services.AddSingleton<SystemSettingsRuntimeOptions>();
+builder.Services.AddSingleton(new FileTransferLimiter(
+    maxConcurrentUploads: 4,
+    maxConcurrentDownloads: 20,
+    uploadBytesPerSecond: 50L * 1024 * 1024,
+    downloadBytesPerSecond: 100L * 1024 * 1024));
+
 builder.Services.AddSingleton<IFileStorageBackgroundTaskQueue, FileStorageBackgroundTaskQueue>();
 builder.Services.AddScoped<IFileStorageConsistencyService, FileStorageConsistencyService>();
 builder.Services.AddScoped<IMultipartUploadBackgroundTaskProcessor, MultipartUploadBackgroundTaskProcessor>();
 builder.Services.AddScoped<IFileStorageMultipartService, FileStorageMultipartService>();
+builder.Services.AddScoped<ISystemSettingsService, SystemSettingsService>();
 builder.Services.AddHostedService<FileStorageBackgroundService>();
 builder.Services.AddHostedService<FileStorageCleanupBackgroundService>();
 
@@ -152,8 +165,10 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddApiTokenAuthentication();
 
 var app = builder.Build();
+var hasHttpsEndpoint = app.Configuration.GetSection("Kestrel:Endpoints:Https").Exists();
 
 await app.InitializeDatabaseAsync();
+await app.LoadSystemSettingsAsync();
 await app.InitializeAdminTokenAsync();
 
 app.UseApplicationRequestLogging();
@@ -164,7 +179,11 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+if (hasHttpsEndpoint)
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseBlazorFrameworkFiles();
 app.UseStaticFiles();
 

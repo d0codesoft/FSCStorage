@@ -9,7 +9,10 @@
 	  Codepage="65001"
 	  Scope="perMachine">
 
-		<MajorUpgrade DowngradeErrorMessage="!(loc.DowngradeErrorMessage)" />
+		<!-- Dev builds often reuse ProductVersion, so same-version MSI builds must replace older ProductCodes instead of adding ARP entries. -->
+		<MajorUpgrade
+		  DowngradeErrorMessage="!(loc.DowngradeErrorMessage)"
+		  AllowSameVersionUpgrades="yes" />
 		<MediaTemplate EmbedCab="yes" />
 		<Launch Condition="Privileged" Message="!(loc.AdminPrivilegesRequiredMessage)" />
 
@@ -91,6 +94,18 @@
 			Sequence="execute" />
 
 		<SetProperty
+			Id="BackupAppSettings"
+			Value="&quot;[SystemFolder]cmd.exe&quot; /d /c if exist &quot;[INSTALLFOLDER]appsettings.json&quot; copy /y &quot;[INSTALLFOLDER]appsettings.json&quot; &quot;[TempFolder]FSCStorage.appsettings.backup.json&quot; &gt;NUL"
+			Before="BackupAppSettings"
+			Sequence="execute" />
+
+		<SetProperty
+			Id="RestoreAppSettings"
+			Value="&quot;[SystemFolder]cmd.exe&quot; /d /c if exist &quot;[TempFolder]FSCStorage.appsettings.backup.json&quot; copy /y &quot;[TempFolder]FSCStorage.appsettings.backup.json&quot; &quot;[INSTALLFOLDER]appsettings.json&quot; &gt;NUL"
+			Before="RestoreAppSettings"
+			Sequence="execute" />
+
+		<SetProperty
 			Id="LaunchInstalledVersionRepair"
 			Value="&quot;[SystemFolder]msiexec.exe&quot; /fa [WIX_UPGRADE_DETECTED] REINSTALLMODE=amus"
 			Before="LaunchInstalledVersionRepair"
@@ -98,6 +113,23 @@
 
 		<CustomAction
 		  Id="ConfigureTransport"
+		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+		  DllEntry="WixSilentExec"
+		  Execute="deferred"
+		  Impersonate="no"
+		  Return="check"
+		  HideTarget="yes" />
+
+		<CustomAction
+		  Id="BackupAppSettings"
+		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+		  DllEntry="WixSilentExec"
+		  Execute="immediate"
+		  Return="check"
+		  HideTarget="yes" />
+
+		<CustomAction
+		  Id="RestoreAppSettings"
 		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
 		  DllEntry="WixSilentExec"
 		  Execute="deferred"
@@ -114,6 +146,8 @@
 		  HideTarget="yes" />
 
 		<InstallExecuteSequence>
+			<Custom Action="BackupAppSettings" Before="RemoveExistingProducts" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+			<Custom Action="RestoreAppSettings" After="InstallFiles" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
 			<Custom Action="ConfigureTransport" After="InstallFiles" Condition="(NOT Installed AND NOT WIX_UPGRADE_DETECTED) OR CHANGE_CONFIG=&quot;1&quot;" />
 		</InstallExecuteSequence>
 
