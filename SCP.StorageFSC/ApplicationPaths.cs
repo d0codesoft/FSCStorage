@@ -1,3 +1,5 @@
+using Serilog;
+
 public sealed class ApplicationPaths
 {
     public required string BasePath { get; init; }
@@ -16,13 +18,15 @@ public sealed class ApplicationPaths
             "storage",
             null);
 
-        return new ApplicationPaths
+        var applicationPaths = new ApplicationPaths
         {
             BasePath = basePath,
             LogsPath = ResolvePath(configuration["Paths:LogsPath"], "{Root}/logs", basePath),
             DataPath = ResolvePath(configuration["Paths:DataPath"], "{Root}/data", basePath),
             TempPath = ResolvePath(configuration["Paths:TempPath"], "{Root}/temp", basePath)
         };
+
+        return applicationPaths;
     }
 
     private static string ResolvePath(

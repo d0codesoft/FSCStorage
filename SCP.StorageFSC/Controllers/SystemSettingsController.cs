@@ -9,7 +9,7 @@ namespace SCP.StorageFSC.Controllers
 {
     [ApiController]
     [Route("ui-api/system-settings")]
-    [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
+    [Authorize(Policy = ApiTokenAuthenticationExtensions.WebUserOnlyPolicy)]
     [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
     public sealed class SystemSettingsController : ControllerBase
     {

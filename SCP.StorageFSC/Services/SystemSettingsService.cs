@@ -112,7 +112,6 @@ namespace SCP.StorageFSC.Services
 
         public async Task<IReadOnlyList<SystemSettingDto>> GetAllAsync(CancellationToken cancellationToken = default)
         {
-            DemandAdmin();
             await EnsureKnownSettingsAsync(cancellationToken);
 
             var settings = await _repository.GetAllAsync(cancellationToken);
@@ -126,7 +125,6 @@ namespace SCP.StorageFSC.Services
             string name,
             CancellationToken cancellationToken = default)
         {
-            DemandAdmin();
             var definition = GetDefinitionOrNull(name);
             if (definition is null)
                 return null;
@@ -141,7 +139,6 @@ namespace SCP.StorageFSC.Services
             UpdateSystemSettingRequest request,
             CancellationToken cancellationToken = default)
         {
-            DemandAdmin();
             ArgumentNullException.ThrowIfNull(request);
 
             var definition = GetDefinitionOrThrow(name);
@@ -263,13 +260,6 @@ namespace SCP.StorageFSC.Services
                 : definition.DefaultValue;
 
             return Enum.Parse<LogEventLevel>(value, ignoreCase: true);
-        }
-
-        private void DemandAdmin()
-        {
-            var current = _currentTenantAccessor.GetRequired();
-            if (!current.IsAdmin)
-                throw new UnauthorizedAccessException("Administrative user is required.");
         }
 
         private static SettingDefinition GetDefinitionOrThrow(string name)

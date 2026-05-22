@@ -218,4 +218,19 @@ app.Lifetime.ApplicationStopped.Register(() =>
     logger.LogInformation("Application has stopped.");
 });
 
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    var logger = app.Services.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("ApplicationLifetime");
+    var applicationPaths = app.Services.GetRequiredService<ApplicationPaths>();
+
+    logger.LogInformation("Application has started.");
+    logger.LogInformation(
+        "Application paths. BasePath={BasePath}, LogsPath={LogsPath}, DataPath={DataPath}, TempPath={TempPath}",
+        applicationPaths.BasePath,
+        applicationPaths.LogsPath,
+        applicationPaths.DataPath,
+        applicationPaths.TempPath);
+});
+
 app.Run();
