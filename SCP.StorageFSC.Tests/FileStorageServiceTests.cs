@@ -441,6 +441,16 @@ public sealed class FileStorageServiceTests : IDisposable
             return Task.FromResult(tenantFile.Id);
         }
 
+        public Task<bool> UpdateAsync(TenantFile tenantFile, CancellationToken cancellationToken = default)
+        {
+            var index = _items.FindIndex(file => file.Id == tenantFile.Id);
+            if (index < 0)
+                return Task.FromResult(false);
+
+            _items[index] = tenantFile;
+            return Task.FromResult(true);
+        }
+
         public Task<TenantFile?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.FirstOrDefault(file => file.Id == id));
@@ -449,6 +459,12 @@ public sealed class FileStorageServiceTests : IDisposable
         public Task<TenantFile?> GetByFileGuidAsync(Guid fileGuid, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_items.FirstOrDefault(file => file.FileGuid == fileGuid && file.IsActive));
+        }
+
+        public Task<TenantFile?> GetByExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                _items.FirstOrDefault(file => file.TenantId == tenantId && file.ExternalKey == externalKey && file.IsActive));
         }
 
         public Task<TenantFile?> GetByTenantAndFileGuidAsync(Guid tenantId, Guid fileGuid, CancellationToken cancellationToken = default)

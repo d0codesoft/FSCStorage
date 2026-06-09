@@ -176,6 +176,7 @@ app.UseApplicationExceptionHandling();
 
 if (app.Environment.IsDevelopment())
 {
+    app.UseWebAssemblyDebugging();
     app.MapOpenApi();
 }
 

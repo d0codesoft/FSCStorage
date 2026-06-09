@@ -1,6 +1,7 @@
 @page "/users"
 @attribute [Authorize]
 @inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Users</PageTitle>
@@ -186,11 +187,11 @@
                 <RadzenCard class="details-panel">
                     <div class="details-header">
                         <div>
-                            <div class="primary-cell">@user.UserName</div>
+                            <a href="@($"/users/{user.UserId}")" class="primary-cell">@user.UserName</a>
                             <div class="secondary-cell">@user.Email</div>
                         </div>
                         <div class="button-row">
-                            <RadzenButton Text="Edit" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginEditUser(user))" />
+                            <RadzenButton Text="Edit" Icon="edit" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => OpenUserDetails(user.UserId))" />
                             <RadzenButton Text="Add tenant" Icon="add_business" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginCreateTenant(user))" />
                             <RadzenButton Text="Add API key" Icon="vpn_key" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@(() => BeginCreateToken(user))" Disabled="@(user.Tenants.Count == 0)" />
                             <RadzenButton Text="@(user.IsLocked ? "Unblock" : "Block")" Icon="@(user.IsLocked ? "lock_open" : "lock")" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Warning" Click="@(() => ToggleBlockUserAsync(user))" />
@@ -540,5 +541,10 @@
         {
             isBusy = false;
         }
+    }
+
+    private void OpenUserDetails(Guid userId)
+    {
+        Navigation.NavigateTo($"/users/{userId}");
     }
 }

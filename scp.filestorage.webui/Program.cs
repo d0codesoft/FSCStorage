@@ -21,5 +21,6 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<ApiTokenAuthenticationStateProvider>());
 
 builder.Services.AddScoped<AdminApiClient>();
+builder.Services.AddScoped<CurrentUserService>();
 
 await builder.Build().RunAsync();

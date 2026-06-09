@@ -106,6 +106,12 @@
 			Sequence="execute" />
 
 		<SetProperty
+			Id="CleanUpgradeBinaries"
+			Value="&quot;[SystemFolder]cmd.exe&quot; /d /c for /r &quot;[INSTALLFOLDER].&quot; %F in (*.dll *.exe) do del /f /q &quot;%F&quot;"
+			Before="CleanUpgradeBinaries"
+			Sequence="execute" />
+
+		<SetProperty
 			Id="LaunchInstalledVersionRepair"
 			Value="&quot;[SystemFolder]msiexec.exe&quot; /fa [WIX_UPGRADE_DETECTED] REINSTALLMODE=amus"
 			Before="LaunchInstalledVersionRepair"
@@ -138,6 +144,15 @@
 		  HideTarget="yes" />
 
 		<CustomAction
+		  Id="CleanUpgradeBinaries"
+		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+		  DllEntry="WixSilentExec"
+		  Execute="deferred"
+		  Impersonate="no"
+		  Return="check"
+		  HideTarget="yes" />
+
+		<CustomAction
 		  Id="LaunchInstalledVersionRepair"
 		  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
 		  DllEntry="WixSilentExec"
@@ -147,6 +162,7 @@
 
 		<InstallExecuteSequence>
 			<Custom Action="BackupAppSettings" Before="RemoveExistingProducts" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
+			<Custom Action="CleanUpgradeBinaries" Before="InstallFiles" Condition="WIX_UPGRADE_DETECTED AND NOT Installed AND UPGRADE_ACTION=&quot;UPGRADE&quot;" />
 			<Custom Action="RestoreAppSettings" After="InstallFiles" Condition="WIX_UPGRADE_DETECTED AND NOT Installed" />
 			<Custom Action="ConfigureTransport" After="InstallFiles" Condition="(NOT Installed AND NOT WIX_UPGRADE_DETECTED) OR CHANGE_CONFIG=&quot;1&quot;" />
 		</InstallExecuteSequence>

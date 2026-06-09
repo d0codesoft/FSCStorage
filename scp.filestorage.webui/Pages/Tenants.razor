@@ -4,18 +4,18 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>Tenants</PageTitle>
+<PageTitle>Instance</PageTitle>
 
 <div class="page-heading">
     <div>
         <h1>Tenants</h1>
-        <p>@(isAdmin ? "Browse, open, edit, and remove storage tenants." : "Browse only the tenants linked to your current user.")</p>
+        <p>@(isAdmin ? "Browse, open, edit, and remove storage instances." : "Browse only the instances linked to your current user.")</p>
     </div>
     <div class="button-row">
         <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
         @if (isAdmin)
         {
-            <RadzenButton Text="Add tenant" Icon="add_business" Click="@BeginCreateTenant" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Add Instance" Icon="add_business" Click="@BeginCreateTenant" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
         }
     </div>
 </div>
@@ -39,7 +39,7 @@
     <section class="data-section">
         <RadzenCard class="details-panel">
             <div class="details-header">
-                <h2>@(editingTenantId.HasValue ? "Edit tenant" : "New tenant")</h2>
+                <h2>@(editingTenantId.HasValue ? "Edit Instance" : "New Instance")</h2>
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelEdit">Close</button>
             </div>
 
@@ -107,7 +107,7 @@
                 {
                     <RadzenDataGridColumn TItem="TenantViewModel" Title="User" Property="UserId">
                         <Template Context="tenant">
-                            <div class="secondary-cell">@tenant.UserId</div>
+                            <a href="@($"/users/{tenant.UserId}")" class="secondary-cell">@tenant.UserName (@tenant.UserEmail)</a>
                         </Template>
                     </RadzenDataGridColumn>
                 }

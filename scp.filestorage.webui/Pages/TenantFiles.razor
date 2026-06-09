@@ -1,0 +1,204 @@
+@page "/tenant-files"
+@page "/tenants/{TenantId:guid}/files"
+@attribute [Authorize]
+@inject scp.filestorage.webui.Services.AdminApiClient ApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Tenant files</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>Tenant files</h1>
+        <p>@(selectedTenant is null ? "Select a tenant to browse stored files." : $"Files stored for {selectedTenant.Name}.")</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToTenants" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+<section class="data-section">
+    <RadzenCard class="details-panel">
+        <div class="file-filter-row">
+            <RadzenFormField Text="Tenant" class="file-filter-field">
+                <RadzenDropDown Data="@tenants"
+                                TValue="Guid?"
+                                Value="@selectedTenantId"
+                                ValueChanged="@OnTenantChangedAsync"
+                                TextProperty="Name"
+                                ValueProperty="Id"
+                                Disabled="@isBusy"
+                                Style="width: 100%;" />
+            </RadzenFormField>
+            <RadzenFormField Text="Name contains" class="file-filter-field">
+                <RadzenTextBox @bind-Value="nameFilter" @bind-Value:after="ApplyFilter" Disabled="@isBusy" Style="width: 100%;" />
+            </RadzenFormField>
+            <RadzenButton Text="Clear" Icon="filter_alt_off" Click="@ClearFilter" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        </div>
+    </RadzenCard>
+</section>
+
+<section class="data-section">
+    @if (isBusy && files is null)
+    {
+        <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+    }
+    else if (selectedTenant is null)
+    {
+        <RadzenCard class="empty-panel">
+            <RadzenIcon Icon="apartment" />
+            <span>No tenant selected.</span>
+        </RadzenCard>
+    }
+    else if (FilteredFiles.Count > 0)
+    {
+        <RadzenDataGrid Data="@FilteredFiles"
+                        TItem="StoredTenantFileViewModel"
+                        AllowPaging="true"
+                        PageSize="25"
+                        PageSizeOptions="@pageSizeOptions"
+                        ShowPagingSummary="true"
+                        AllowSorting="true"
+                        class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="File" Property="FileName">
+                    <Template Context="file">
+                        <div class="primary-cell">@file.FileName</div>
+                        <div class="secondary-cell">@file.FileGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="Size" Property="FileSize" TextAlign="TextAlign.Right">
+                    <Template Context="file">@FormatBytes(file.FileSize)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="Content type" Property="ContentType">
+                    <Template Context="file">@(string.IsNullOrWhiteSpace(file.ContentType) ? "-" : file.ContentType)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="Category" Property="Category">
+                    <Template Context="file">@(string.IsNullOrWhiteSpace(file.Category) ? "-" : file.Category)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="External key" Property="ExternalKey">
+                    <Template Context="file">@(string.IsNullOrWhiteSpace(file.ExternalKey) ? "-" : file.ExternalKey)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="StoredTenantFileViewModel" Title="Created UTC" Property="CreatedUtc">
+                    <Template Context="file">@FormatUtc(file.CreatedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+    else
+    {
+        <RadzenCard class="empty-panel">
+            <RadzenIcon Icon="description" />
+            <span>No files match the current selection.</span>
+        </RadzenCard>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public Guid? TenantId { get; set; }
+
+    private IReadOnlyList<TenantViewModel> tenants = [];
+    private IReadOnlyList<StoredTenantFileViewModel>? files;
+    private Guid? selectedTenantId;
+    private string? nameFilter;
+    private bool isBusy;
+    private string? errorMessage;
+    private readonly int[] pageSizeOptions = [5, 10, 25, 50];
+
+    private TenantViewModel? selectedTenant =>
+        selectedTenantId.HasValue
+            ? tenants.FirstOrDefault(tenant => tenant.Id == selectedTenantId.Value)
+            : null;
+
+    private IReadOnlyList<StoredTenantFileViewModel> FilteredFiles =>
+        string.IsNullOrWhiteSpace(nameFilter)
+            ? files ?? []
+            : (files ?? [])
+                .Where(file => file.FileName.Contains(nameFilter.Trim(), StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        selectedTenantId = TenantId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            tenants = await ApiClient.GetTenantsAsync();
+
+            selectedTenantId = selectedTenantId.HasValue && tenants.Any(tenant => tenant.Id == selectedTenantId.Value)
+                ? selectedTenantId
+                : tenants.FirstOrDefault()?.Id;
+
+            files = selectedTenantId.HasValue
+                ? await ApiClient.GetTenantFilesAsync(selectedTenantId.Value)
+                : [];
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            files = [];
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task OnTenantChangedAsync(Guid? tenantId)
+    {
+        selectedTenantId = tenantId;
+        if (tenantId.HasValue)
+            Navigation.NavigateTo($"/tenants/{tenantId.Value}/files", replace: true);
+
+        await LoadAsync();
+    }
+
+    private void ApplyFilter()
+    {
+    }
+
+    private void ClearFilter()
+    {
+        nameFilter = null;
+    }
+
+    private void BackToTenants()
+    {
+        Navigation.NavigateTo("/tenants");
+    }
+
+    private static string FormatUtc(DateTime value)
+    {
+        return value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = (double)bytes;
+        var unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes} B" : $"{value:0.##} {units[unit]}";
+    }
+}

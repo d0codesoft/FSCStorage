@@ -1,0 +1,278 @@
+@inject AdminApiClient ApiClient
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+<RadzenStack Orientation="Orientation.Vertical" Gap="1.25rem">
+    <div class="user-detail-grid">
+        <RadzenCard class="details-panel">
+            <h2>Password</h2>
+            <RadzenTemplateForm TItem="ResetPasswordModel" Data="@passwordModel" Submit="@ResetPasswordAsync">
+                <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem">
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                        <RadzenLabel Component="NewPasswordInput">
+                            <RadzenIcon Icon="password" class="rz-mr-1" /> Temporary password
+                        </RadzenLabel>
+                        <RadzenPassword Name="NewPasswordInput" @bind-Value="passwordModel.NewPassword" Disabled="@isBusy" Style="width: 100%;" />
+                    </RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                        <RadzenCheckBox Name="MustChangePasswordInput" @bind-Value="passwordModel.MustChangePassword" Disabled="@isBusy" />
+                        <RadzenLabel Component="MustChangePasswordInput" Text="Must change password" />
+                    </RadzenStack>
+                    <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap">
+                        <RadzenButton Text="Reset password" Icon="save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Disabled="@isBusy" IsBusy="@isBusy" />
+                        <RadzenButton Text="Expire password" Icon="hourglass_empty" ButtonStyle="ButtonStyle.Warning" Click="@ExpirePasswordAsync" Disabled="@isBusy" />
+                    </RadzenStack>
+                </RadzenStack>
+            </RadzenTemplateForm>
+        </RadzenCard>
+
+        <RadzenCard class="details-panel">
+            <h2>Security</h2>
+            <dl class="details-grid">
+                <dt>Created</dt>
+                <dd>@FormatUtc(User.CreatedUtc)</dd>
+                <dt>Updated</dt>
+                <dd>@FormatUtc(User.UpdatedUtc)</dd>
+                <dt>Password changed</dt>
+                <dd>@FormatUtc(User.PasswordChangedUtc)</dd>
+                <dt>Password expires</dt>
+                <dd>@FormatUtc(User.PasswordExpiresUtc)</dd>
+                <dt>Failed logins</dt>
+                <dd>@User.FailedLoginCount</dd>
+                <dt>Last failed login</dt>
+                <dd>@FormatUtc(User.LastFailedLoginUtc)</dd>
+                <dt>Last login</dt>
+                <dd>@FormatUtc(User.LastLoginUtc)</dd>
+                <dt>Last login IP</dt>
+                <dd>@(User.LastLoginIpAddress ?? "-")</dd>
+            </dl>
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap">
+                <RadzenButton Text="Refresh stamp" Icon="sync" ButtonStyle="ButtonStyle.Light" Click="@RefreshSecurityStampAsync" Disabled="@isBusy" />
+                <RadzenButton Text="Revoke sessions" Icon="logout" ButtonStyle="ButtonStyle.Warning" Click="@RevokeSessionsAsync" Disabled="@isBusy" />
+            </RadzenStack>
+        </RadzenCard>
+    </div>
+
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>Login history</h2>
+            <RadzenButton Text="Refresh" Icon="refresh" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small" Click="@LoadHistoryAsync" Disabled="@isBusy" />
+        </div>
+        <RadzenDataGrid Data="@loginHistory" TItem="UserLoginHistoryViewModel" AllowPaging="true" PageSize="5" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="UserLoginHistoryViewModel" Title="Last login">
+                    <Template Context="item">@FormatUtc(item.LastLoginUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserLoginHistoryViewModel" Property="LastLoginIpAddress" Title="IP" />
+                <RadzenDataGridColumn TItem="UserLoginHistoryViewModel" Title="Last failed">
+                    <Template Context="item">@FormatUtc(item.LastFailedLoginUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserLoginHistoryViewModel" Property="FailedLoginCount" Title="Failed count" />
+                <RadzenDataGridColumn TItem="UserLoginHistoryViewModel" Title="2FA last used">
+                    <Template Context="item">@FormatUtc(item.TwoFactorLastUsedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>Security events</h2>
+            <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@securityEvents.Count.ToString()" />
+        </div>
+        <RadzenDataGrid Data="@securityEvents" TItem="UserSecurityEventViewModel" AllowPaging="true" PageSize="6" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="UserSecurityEventViewModel" Property="EventType" Title="Event" />
+                <RadzenDataGridColumn TItem="UserSecurityEventViewModel" Title="Occurred">
+                    <Template Context="item">@FormatUtc(item.OccurredUtc)</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserSecurityEventViewModel" Property="Description" Title="Description" />
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>Tenants</h2>
+            <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@User.Tenants.Count.ToString()" />
+        </div>
+        <RadzenDataGrid Data="@User.Tenants" TItem="TenantViewModel" AllowPaging="true" PageSize="8" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Tenant" Property="Name">
+                    <Template Context="tenant">
+                        <a href="@($"/tenants/{tenant.Id}")" class="primary-cell">@tenant.Name</a>
+                        <div class="secondary-cell">@tenant.TenantGuid</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Status" Property="IsActive">
+                    <Template Context="tenant">
+                        <RadzenBadge BadgeStyle="@(tenant.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(tenant.IsActive ? "Active" : "Disabled")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TenantViewModel" Title="Created">
+                    <Template Context="tenant">@FormatUtc(tenant.CreatedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>API keys</h2>
+            <RadzenBadge BadgeStyle="BadgeStyle.Info" Text="@User.ApiTokens.Count.ToString()" />
+        </div>
+        <RadzenDataGrid Data="@User.ApiTokens" TItem="UserApiTokenViewModel" AllowPaging="true" PageSize="8" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="UserApiTokenViewModel" Title="Key" Property="Name">
+                    <Template Context="token">
+                        <div class="primary-cell">@token.Name</div>
+                        <div class="secondary-cell">@token.TokenPrefix</div>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserApiTokenViewModel" Property="TenantName" Title="Tenant" />
+                <RadzenDataGridColumn TItem="UserApiTokenViewModel" Title="Status" Property="IsActive">
+                    <Template Context="token">
+                        <RadzenBadge BadgeStyle="@(token.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(token.IsActive ? "Active" : "Disabled")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserApiTokenViewModel" Property="ScopesLabel" Title="Scopes" />
+                <RadzenDataGridColumn TItem="UserApiTokenViewModel" Title="Expires">
+                    <Template Context="token">@FormatUtc(token.ExpiresUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenCard>
+</RadzenStack>
+
+@code {
+    [Parameter, EditorRequired]
+    public UserManagementViewModel User { get; set; } = new();
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private readonly ResetPasswordModel passwordModel = new();
+    private IReadOnlyList<UserLoginHistoryViewModel> loginHistory = [];
+    private IReadOnlyList<UserSecurityEventViewModel> securityEvents = [];
+    private bool isBusy;
+    private string? errorMessage;
+    private string? statusMessage;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadHistoryAsync();
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (string.IsNullOrWhiteSpace(passwordModel.NewPassword))
+        {
+            errorMessage = "Temporary password is required.";
+            return;
+        }
+
+        await RunAsync("Password reset.", async () =>
+        {
+            await ApiClient.ResetUserPasswordAsync(User.UserId, new ResetUserPasswordRequestModel
+            {
+                NewPassword = passwordModel.NewPassword,
+                MustChangePassword = passwordModel.MustChangePassword
+            });
+
+            passwordModel.NewPassword = string.Empty;
+            await Changed.InvokeAsync();
+            await LoadHistoryAsync();
+        });
+    }
+
+    private async Task ExpirePasswordAsync()
+    {
+        await RunAsync("Password expired.", async () =>
+        {
+            await ApiClient.ExpireUserPasswordAsync(User.UserId);
+            await Changed.InvokeAsync();
+            await LoadHistoryAsync();
+        });
+    }
+
+    private async Task RefreshSecurityStampAsync()
+    {
+        await RunAsync("Security stamp refreshed.", async () =>
+        {
+            await ApiClient.RefreshUserSecurityStampAsync(User.UserId);
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task RevokeSessionsAsync()
+    {
+        await RunAsync("Sessions revoked.", async () =>
+        {
+            await ApiClient.RevokeUserSessionsAsync(User.UserId);
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        errorMessage = null;
+
+        try
+        {
+            loginHistory = await ApiClient.GetUserLoginHistoryAsync(User.UserId);
+            securityEvents = await ApiClient.GetUserSecurityEventsAsync(User.UserId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task RunAsync(string successMessage, Func<Task> action)
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await action();
+            statusMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private static string FormatUtc(DateTime? value)
+    {
+        return value is null
+            ? "-"
+            : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private sealed class ResetPasswordModel
+    {
+        public string NewPassword { get; set; } = string.Empty;
+        public bool MustChangePassword { get; set; } = true;
+    }
+}

@@ -131,10 +131,38 @@ namespace SCP.StorageFSC.Controllers
             return Ok(ToMeResponse(User));
         }
 
+        [HttpPost("change-password")]
+        [Authorize(Policy = ApiTokenAuthenticationExtensions.WebUserOnlyPolicy)]
+        public async Task<IActionResult> ChangePassword(
+            [FromBody] ChangePasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(request.OldPassword))
+                return BadRequest(ApiErrorResponse.Create(HttpContext, "ValidationError", "Old password is required."));
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+                return BadRequest(ApiErrorResponse.Create(HttpContext, "ValidationError", "New password is required."));
+
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+                return Unauthorized(ApiErrorResponse.Create(HttpContext, "InvalidUser", "Authenticated user is invalid."));
+
+            var changed = await _authenticationService.ChangePasswordAsync(
+                userId,
+                request.OldPassword,
+                request.NewPassword,
+                cancellationToken);
+
+            if (!changed)
+                return Unauthorized(ApiErrorResponse.Create(HttpContext, "InvalidCredentials", "Old password is invalid."));
+
+            return NoContent();
+        }
+
         private static MeResponse ToMeResponse(ClaimsPrincipal principal)
         {
             return new MeResponse
             {
+                Identifier = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? Guid.Empty.ToString(),
                 Name = principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
                 IsAdmin = principal.IsInRole("Admin"),
                 TenantId = Guid.TryParse(principal.FindFirstValue("tenant_id"), out var tenantId)
@@ -154,8 +182,6 @@ namespace SCP.StorageFSC.Controllers
                     IsPersistent = remember,
                     IssuedUtc = DateTimeOffset.UtcNow
                 });
-
-
         }
 
         internal static ClaimsPrincipal CreatePrincipal(
@@ -250,9 +276,16 @@ namespace SCP.StorageFSC.Controllers
 
     public sealed class MeResponse
     {
+        public string Identifier { get; set; } = string.Empty;
         public string Name { get; set; } = string.Empty;
         public bool IsAdmin { get; set; }
         public Guid? TenantId { get; set; }
         public string[] Scopes { get; set; } = [];
+    }
+
+    public sealed class ChangePasswordRequest
+    {
+        public string OldPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
     }
 }

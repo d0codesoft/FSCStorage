@@ -226,149 +226,74 @@ namespace scp.filestorage.Controllers
             return GetTenantTokens(tenantId, cancellationToken);
         }
 
-        [HttpGet("users/tenants")]
+        [HttpPost("tenants/{tenantId:guid}/api-tokens")]
         [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        [ProducesResponseType(typeof(IReadOnlyList<UserTenantsDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetUsersWithTenants(CancellationToken cancellationToken)
-        {
-            try
-            {
-                var result = await _tenantStorageService.GetUsersWithTenantsAsync(cancellationToken);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while getting users with tenants.");
-                return Forbid();
-            }
-        }
-
-        [HttpGet("users")]
-        [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        [ProducesResponseType(typeof(IReadOnlyList<UserManagementDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
-        {
-            try
-            {
-                var result = await _tenantStorageService.GetUsersAsync(cancellationToken);
-                return Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while getting users.");
-                return Forbid();
-            }
-        }
-
-        [HttpPost("users")]
-        [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        [ProducesResponseType(typeof(UserManagementDto), StatusCodes.Status201Created)]
-        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var result = await _tenantStorageService.CreateUserAsync(request, cancellationToken);
-                return StatusCode(StatusCodes.Status201Created, result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while creating user.");
-                return Forbid();
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new { error = ex.Message });
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { error = ex.Message });
-            }
-        }
-
-        [HttpPut("users/{userId:guid}")]
-        [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        [ProducesResponseType(typeof(UserManagementDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(CreatedApiTokenResponse), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> UpdateUser(
-            Guid userId,
-            [FromBody] UpdateUserRequest request,
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> CreateTenantToken(
+            Guid tenantId,
+            [FromBody] CreateTenantApiTokenRequest request,
             CancellationToken cancellationToken)
         {
             try
             {
-                var result = await _tenantStorageService.UpdateUserAsync(userId, request, cancellationToken);
-                return result is null ? NotFound() : Ok(result);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while updating user {UserId}.", userId);
-                return Forbid();
+                var result = await _tenantStorageService.CreateTenantApiTokenAsync(
+                    tenantId,
+                    request,
+                    cancellationToken);
+
+                return result is null
+                    ? NotFound(ApiErrorResponse.Create(HttpContext, "TenantNotFound", "Tenant was not found."))
+                    : StatusCode(StatusCodes.Status201Created, CreatedApiTokenResponse.FromResult(result));
             }
             catch (ArgumentException ex)
             {
-                return BadRequest(new { error = ex.Message });
+                return BadRequest(ApiErrorResponse.Create(HttpContext, "ValidationError", ex.Message));
             }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { error = ex.Message });
+                return Conflict(ApiErrorResponse.Create(HttpContext, "Conflict", ex.Message));
             }
         }
 
-        [HttpPost("users/{userId:guid}/block")]
-        [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        public async Task<IActionResult> BlockUser(Guid userId, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var result = await _tenantStorageService.SetUserBlockedAsync(userId, true, cancellationToken);
-                return result ? NoContent() : NotFound();
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while blocking user {UserId}.", userId);
-                return Forbid();
-            }
-        }
-
-        [HttpPost("users/{userId:guid}/unblock")]
-        [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
-        public async Task<IActionResult> UnblockUser(Guid userId, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var result = await _tenantStorageService.SetUserBlockedAsync(userId, false, cancellationToken);
-                return result ? NoContent() : NotFound();
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                _logger.LogWarning(ex, "Access denied while unblocking user {UserId}.", userId);
-                return Forbid();
-            }
-        }
-
-        [HttpDelete("users/{userId:guid}")]
+        [HttpDelete("tenants/{tenantId:guid}/api-tokens/{tokenId:guid}")]
         [Authorize(Policy = ApiTokenAuthenticationExtensions.AdminOnlyPolicy)]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<IActionResult> DeleteUser(Guid userId, CancellationToken cancellationToken)
+        [TenantAccess(TenantAccessMode.AdminOnly, TenantPermission.Admin)]
+        public async Task<IActionResult> DeleteTenantToken(
+            Guid tenantId,
+            Guid tokenId,
+            CancellationToken cancellationToken)
+        {
+            var result = await _tenantStorageService.DeleteTenantApiTokenAsync(
+                tenantId,
+                tokenId,
+                cancellationToken);
+
+            return result
+                ? NoContent()
+                : NotFound(ApiErrorResponse.Create(HttpContext, "FileNotFound", "API token was not found for this tenant."));
+        }
+
+        [HttpGet("tenants/{tenantId:guid}/files")]
+        [ProducesResponseType(typeof(IReadOnlyList<StoredTenantFileDto>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetTenantFiles(Guid tenantId, CancellationToken cancellationToken)
         {
             try
             {
-                var result = await _tenantStorageService.DeleteUserAsync(userId, cancellationToken);
-                if (!result)
+                var tenant = await _tenantStorageService.GetTenantByIdAsync(tenantId, cancellationToken);
+                if (tenant is null)
                     return NotFound();
 
-                await QueueDeletedTenantCleanupTaskAsync(cancellationToken);
-                return NoContent();
+                var result = await _tenantStorageService.GetTenantFilesAsync(tenantId, cancellationToken);
+                return Ok(result);
             }
             catch (UnauthorizedAccessException ex)
             {
-                _logger.LogWarning(ex, "Access denied while deleting user {UserId}.", userId);
+                _logger.LogWarning(ex, "Access denied while getting files for tenant {TenantId}.", tenantId);
                 return Forbid();
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { error = ex.Message });
             }
         }
 

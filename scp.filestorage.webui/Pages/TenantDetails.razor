@@ -3,16 +3,18 @@
 @inject scp.filestorage.webui.Services.AdminApiClient ApiClient
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject DialogService DialogService
 
-<PageTitle>Tenant details</PageTitle>
+<PageTitle>Information about the owner</PageTitle>
 
 <div class="page-heading">
     <div>
-        <h1>@(tenant?.Name ?? "Tenant details")</h1>
-        <p>@(isAdmin ? "Tenant profile, activation state, and API keys." : "Tenant profile and your API keys for this tenant.")</p>
+        <h1>@(tenant?.Name ?? "Owner details")</h1>
+        <p>@(isAdmin ? "Owner profile, activation state, and API keys." : "Owner profile and your API keys for this owner.")</p>
     </div>
-    <div class="button-row">
+        <div class="button-row">
         <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToTenants" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Files" Icon="description" Click="@OpenFiles" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
         <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
     </div>
 </div>
@@ -107,7 +109,7 @@ else if (tenant is not null)
             {
                 <div class="button-row">
                     <button type="button" class="btn btn-outline-secondary" @onclick="CancelTokenEdit" disabled="@isBusy">Cancel editor</button>
-                    <button type="button" class="btn btn-primary" @onclick="BeginCreateToken" disabled="@isBusy">Add API key</button>
+                    <RadzenButton Text="Add API key" Icon="add" Click="@OpenCreateTokenDialogAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
                 </div>
             }
         </div>
@@ -297,20 +299,36 @@ else if (tenant is not null)
         }
     }
 
-    private void BeginCreateToken()
+    private async Task OpenCreateTokenDialogAsync()
     {
+        if (tenant is null)
+            return;
+
         createdToken = null;
         errorMessage = null;
         statusMessage = null;
-        editingTokenId = null;
-        tokenEditor.Name = string.Empty;
-        tokenEditor.CanRead = true;
-        tokenEditor.CanWrite = false;
-        tokenEditor.CanDelete = false;
-        tokenEditor.IsAdmin = false;
-        tokenEditor.IsActive = true;
-        tokenEditor.ExpiresUtcText = null;
-        showTokenEditor = true;
+
+        var result = await DialogService.OpenAsync(
+            $"Create API key for {tenant.Name}",
+            typeof(TenantApiTokenDialog),
+            new Dictionary<string, object?>
+            {
+                [nameof(TenantApiTokenDialog.TenantId)] = tenant.Id
+            },
+            new DialogOptions
+            {
+                Width = "520px",
+                CloseDialogOnEsc = true,
+                CloseDialogOnOverlayClick = false,
+                ShowClose = true
+            });
+
+        if (result is not CreatedApiTokenViewModel token)
+            return;
+
+        createdToken = token;
+        statusMessage = "API key created.";
+        tokens = await ApiClient.GetTenantTokensAsync(TenantId);
     }
 
     private void BeginEditToken(ApiTokenViewModel token)
@@ -424,7 +442,16 @@ else if (tenant is not null)
 
     private async Task DeleteTokenAsync(ApiTokenViewModel token)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"Delete API key '{token.Name}'?"))
+        var confirmed = await DialogService.Confirm(
+            $"Delete API key '{token.Name}'?",
+            "Delete API key",
+            new ConfirmOptions
+            {
+                OkButtonText = "Delete",
+                CancelButtonText = "Cancel"
+            });
+
+        if (confirmed != true)
             return;
 
         isBusy = true;
@@ -433,7 +460,7 @@ else if (tenant is not null)
 
         try
         {
-            await ApiClient.DeleteApiTokenAsync(token.Id);
+            await ApiClient.DeleteTenantApiTokenAsync(TenantId, token.Id);
             statusMessage = "API key deleted.";
             tokens = await ApiClient.GetTenantTokensAsync(TenantId);
         }
@@ -450,6 +477,11 @@ else if (tenant is not null)
     private void BackToTenants()
     {
         Navigation.NavigateTo("/tenants");
+    }
+
+    private void OpenFiles()
+    {
+        Navigation.NavigateTo($"/tenants/{TenantId}/files");
     }
 
     private static string FormatUtc(DateTime? value)

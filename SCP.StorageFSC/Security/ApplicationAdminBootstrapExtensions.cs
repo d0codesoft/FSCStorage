@@ -12,6 +12,7 @@ namespace SCP.StorageFSC.Security
     public static class ApplicationAdminBootstrapExtensions
     {
         private const string AdminConfigFileName = "admin.conf";
+        private static readonly Guid SystemUserId = Guid.Parse("019e4feb-8a56-776b-ad21-50a569f12d89");
 
         public static async Task<WebApplication> InitializeAdminTokenAsync(
             this WebApplication app,
@@ -93,14 +94,15 @@ namespace SCP.StorageFSC.Security
                 logger.LogWarning("Admin config file saved: {ConfigPath}", configPath);
             }
 
-            var adminUser = await userRepository.GetByNormalizedNameAsync(
-                Normalize(config.Name),
+            var adminUser = await userRepository.GetByIdAsync(
+                SystemUserId,
                 cancellationToken);
 
             if (adminUser is null)
             {
                 adminUser = new User
                 {
+                    Id = SystemUserId,
                     Name = config.Name,
                     NormalizedName = Normalize(config.Name),
                     Email = $"{config.Name}@example.com",

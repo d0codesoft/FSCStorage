@@ -70,6 +70,18 @@ namespace scp.filestorage.webui.Services
                 ?? [];
         }
 
+        public async Task<UserManagementViewModel?> GetUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync($"ui-api/users/{userId}", cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return null;
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<UserManagementViewModel>(
+                cancellationToken: cancellationToken);
+        }
+
         public async Task<UserManagementViewModel> CreateUserAsync(
             CreateUserRequestModel request,
             CancellationToken cancellationToken = default)
@@ -91,6 +103,23 @@ namespace scp.filestorage.webui.Services
             return (await response.Content.ReadFromJsonAsync<UserManagementViewModel>(cancellationToken: cancellationToken))!;
         }
 
+        public async Task<UserManagementViewModel> UpdateUserProfileAsync(
+            Guid userId,
+            UpdateUserProfileRequestModel request,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PutAsJsonAsync($"ui-api/users/{userId}", request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return (await response.Content.ReadFromJsonAsync<UserManagementViewModel>(cancellationToken: cancellationToken))!;
+        }
+
+        public Task ActivateUserAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "activate", cancellationToken);
+
+        public Task DeactivateUserAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "deactivate", cancellationToken);
+
         public async Task BlockUserAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.PostAsync($"ui-api/users/{userId}/block", null, cancellationToken);
@@ -106,6 +135,126 @@ namespace scp.filestorage.webui.Services
         public async Task DeleteUserAsync(Guid userId, CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.DeleteAsync($"ui-api/users/{userId}", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public async Task ResetUserPasswordAsync(
+            Guid userId,
+            ResetUserPasswordRequestModel request,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/users/{userId}/password/reset",
+                request,
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public Task ExpireUserPasswordAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "password/expire", cancellationToken);
+
+        public async Task<UserTwoFactorStatusViewModel?> GetUserTwoFactorStatusAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync($"ui-api/users/{userId}/2fa/status", cancellationToken);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return null;
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<UserTwoFactorStatusViewModel>(
+                cancellationToken: cancellationToken);
+        }
+
+        public Task EnableUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "2fa/enable", cancellationToken);
+
+        public Task DisableUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "2fa/disable", cancellationToken);
+
+        public async Task SetUserPreferredTwoFactorMethodAsync(
+            Guid userId,
+            TwoFactorMethodType methodType,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/users/{userId}/2fa/set-preferred-method",
+                new SetPreferredTwoFactorMethodRequestModel { PreferredTwoFactorMethod = methodType },
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public async Task SetUserTwoFactorRequiredAsync(
+            Guid userId,
+            bool required,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/users/{userId}/2fa/set-required-for-every-login",
+                new SetTwoFactorRequiredRequestModel { Required = required },
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public Task ResetUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "2fa/reset", cancellationToken);
+
+        public async Task<IReadOnlyList<string>> RegenerateRecoveryCodesAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsync(
+                $"ui-api/users/{userId}/2fa/recovery-codes/regenerate",
+                null,
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var result = await response.Content.ReadFromJsonAsync<RecoveryCodesResponse>(
+                cancellationToken: cancellationToken);
+
+            return result?.RecoveryCodes ?? [];
+        }
+
+        public Task RefreshUserSecurityStampAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "security-stamp/refresh", cancellationToken);
+
+        public Task RevokeUserSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
+            => PostUserActionAsync(userId, "sessions/revoke-all", cancellationToken);
+
+        public async Task<IReadOnlyList<UserLoginHistoryViewModel>> GetUserLoginHistoryAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync($"ui-api/users/{userId}/login-history", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<UserLoginHistoryViewModel>>(
+                cancellationToken: cancellationToken)
+                ?? [];
+        }
+
+        public async Task<IReadOnlyList<UserSecurityEventViewModel>> GetUserSecurityEventsAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync($"ui-api/users/{userId}/security-events", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<UserSecurityEventViewModel>>(
+                cancellationToken: cancellationToken)
+                ?? [];
+        }
+
+        public async Task ChangePasswordAsync(
+            ChangePasswordRequestModel request,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync("auth/change-password", request, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
@@ -148,11 +297,38 @@ namespace scp.filestorage.webui.Services
                 ?? [];
         }
 
+        public async Task<IReadOnlyList<StoredTenantFileViewModel>> GetTenantFilesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.GetAsync($"ui-api/tenants/{tenantId}/files", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<IReadOnlyList<StoredTenantFileViewModel>>(
+                cancellationToken: cancellationToken)
+                ?? [];
+        }
+
         public async Task<CreatedApiTokenViewModel> CreateApiTokenAsync(
             CreateApiTokenRequestModel request,
             CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.PostAsJsonAsync("ui-api/api-tokens", request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return (await response.Content.ReadFromJsonAsync<CreatedApiTokenViewModel>(cancellationToken: cancellationToken))!;
+        }
+
+        public async Task<CreatedApiTokenViewModel> CreateTenantApiTokenAsync(
+            Guid tenantId,
+            CreateTenantApiTokenRequestModel request,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/tenants/{tenantId}/api-tokens",
+                request,
+                cancellationToken);
+
             await EnsureSuccessAsync(response, cancellationToken);
 
             return (await response.Content.ReadFromJsonAsync<CreatedApiTokenViewModel>(cancellationToken: cancellationToken))!;
@@ -172,6 +348,18 @@ namespace scp.filestorage.webui.Services
         public async Task DeleteApiTokenAsync(Guid tokenId, CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.DeleteAsync($"ui-api/api-tokens/{tokenId}", cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public async Task DeleteTenantApiTokenAsync(
+            Guid tenantId,
+            Guid tokenId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.DeleteAsync(
+                $"ui-api/tenants/{tenantId}/api-tokens/{tokenId}",
+                cancellationToken);
+
             await EnsureSuccessAsync(response, cancellationToken);
         }
 
@@ -270,6 +458,17 @@ namespace scp.filestorage.webui.Services
             return await response.Content.ReadFromJsonAsync<IReadOnlyList<BackgroundTaskViewModel>>(
                 cancellationToken: cancellationToken)
                 ?? [];
+        }
+
+        private async Task PostUserActionAsync(Guid userId, string action, CancellationToken cancellationToken)
+        {
+            var response = await _httpClient.PostAsync($"ui-api/users/{userId}/{action}", null, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        private sealed class RecoveryCodesResponse
+        {
+            public string[] RecoveryCodes { get; set; } = [];
         }
 
         private static async Task EnsureSuccessAsync(

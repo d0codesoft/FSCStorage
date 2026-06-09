@@ -353,6 +353,17 @@ h1:focus {
     min-height: 2.5rem;
 }
 
+.file-filter-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto;
+    gap: 1rem;
+    align-items: end;
+}
+
+.file-filter-field {
+    width: 100%;
+}
+
 .admin-check .form-check-input {
     margin-top: 0;
 }
@@ -519,6 +530,10 @@ h1:focus {
     }
 
     .details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .file-filter-row {
         grid-template-columns: 1fr;
     }
 

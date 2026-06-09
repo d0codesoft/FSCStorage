@@ -2,10 +2,21 @@ using System.ComponentModel.DataAnnotations;
 
 namespace scp.filestorage.webui.Models
 {
+    public enum TwoFactorMethodType
+    {
+        None = 0,
+        AuthenticatorApp = 1,
+        Email = 2,
+        Sms = 3
+    }
+
     public sealed class TenantViewModel
     {
         public Guid Id { get; set; }
         public Guid UserId { get; set; }
+        public string UserName { get; set; } = string.Empty;
+        public string UserEmail { get; set; } = string.Empty;
+        public bool IsActiveUser { get; set; } = true;
         public Guid TenantGuid { get; set; }
         public string Name { get; set; } = string.Empty;
         public bool IsActive { get; set; }
@@ -18,7 +29,7 @@ namespace scp.filestorage.webui.Models
         [Required(ErrorMessage = "Owner user is required.")]
         public Guid UserId { get; set; }
 
-        [Required(ErrorMessage = "Tenant name is required.")]
+        [Required(ErrorMessage = "Instance name is required.")]
         public string Name { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
     }
@@ -66,6 +77,23 @@ namespace scp.filestorage.webui.Models
         }
     }
 
+    public sealed class StoredTenantFileViewModel
+    {
+        public Guid TenantFileId { get; set; }
+        public Guid FileGuid { get; set; }
+        public Guid TenantId { get; set; }
+        public Guid StoredFileId { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public string? ExternalKey { get; set; }
+        public string? ContentType { get; set; }
+        public int StateCompress { get; set; }
+        public long FileSize { get; set; }
+        public string Sha256 { get; set; } = string.Empty;
+        public string Crc32 { get; set; } = string.Empty;
+        public DateTime CreatedUtc { get; set; }
+    }
+
     public sealed class ApiTokenEditorModel
     {
         [Required(ErrorMessage = "Token name is required.")]
@@ -82,6 +110,16 @@ namespace scp.filestorage.webui.Models
     {
         public Guid UserId { get; set; }
         public Guid TenantId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public bool CanRead { get; set; } = true;
+        public bool CanWrite { get; set; }
+        public bool CanDelete { get; set; }
+        public bool IsAdmin { get; set; }
+        public DateTime? ExpiresUtc { get; set; }
+    }
+
+    public sealed class CreateTenantApiTokenRequestModel
+    {
         public string Name { get; set; } = string.Empty;
         public bool CanRead { get; set; } = true;
         public bool CanWrite { get; set; }
@@ -118,7 +156,25 @@ namespace scp.filestorage.webui.Models
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }
+        public bool IsLocked { get; set; }
+        public DateTime? LockedUntilUtc { get; init; }
+        public int FailedLoginCount { get; init; }
+        public DateTime? LastFailedLoginUtc { get; init; }
+        public DateTime? LastLoginUtc { get; init; }
+        public string? LastLoginIpAddress { get; init; }
+        public bool TwoFactorEnabled { get; set; }
+        public bool TwoFactorRequiredForEveryLogin { get; set; } = true;
+        public TwoFactorMethodType PreferredTwoFactorMethod { get; set; } = TwoFactorMethodType.AuthenticatorApp;
+        public DateTime? TwoFactorEnabledUtc { get; init; }
+        public DateTime? TwoFactorLastUsedUtc { get; init; }
+        public bool MustChangePassword { get; set; }
+        public DateTime? PasswordChangedUtc { get; init; }
+        public DateTime? PasswordExpiresUtc { get; init; }
+        public string? ExternalUserId { get; init; }
+        public string? Comment { get; set; }
         public IReadOnlyList<TenantViewModel> Tenants { get; set; } = [];
     }
 
@@ -164,9 +220,25 @@ namespace scp.filestorage.webui.Models
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }
         public bool IsLocked { get; set; }
-        public DateTime? LockedUntilUtc { get; set; }
+        public DateTime? LockedUntilUtc { get; init; }
+        public int FailedLoginCount { get; init; }
+        public DateTime? LastFailedLoginUtc { get; init; }
+        public DateTime? LastLoginUtc { get; init; }
+        public string? LastLoginIpAddress { get; init; }
+        public bool TwoFactorEnabled { get; set; }
+        public bool TwoFactorRequiredForEveryLogin { get; set; } = true;
+        public TwoFactorMethodType PreferredTwoFactorMethod { get; set; } = TwoFactorMethodType.AuthenticatorApp;
+        public DateTime? TwoFactorEnabledUtc { get; init; }
+        public DateTime? TwoFactorLastUsedUtc { get; init; }
+        public bool MustChangePassword { get; set; }
+        public DateTime? PasswordChangedUtc { get; init; }
+        public DateTime? PasswordExpiresUtc { get; init; }
+        public string? ExternalUserId { get; init; }
+        public string? Comment { get; set; }
         public bool IsAdmin { get; set; }
         public DateTime CreatedUtc { get; set; }
         public DateTime? UpdatedUtc { get; set; }
@@ -187,6 +259,19 @@ namespace scp.filestorage.webui.Models
         public bool IsAdmin { get; set; }
     }
 
+    public sealed class UserProfileEditorModel
+    {
+        [Required(ErrorMessage = "User name is required.")]
+        public string Name { get; set; } = string.Empty;
+
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        public string? Email { get; set; }
+
+        public string? PhoneNumber { get; set; }
+        public string? ExternalUserId { get; set; }
+        public string? Comment { get; set; }
+    }
+
     public sealed class CreateUserRequestModel
     {
         public string Name { get; set; } = string.Empty;
@@ -200,8 +285,96 @@ namespace scp.filestorage.webui.Models
     {
         public string Name { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public bool PhoneNumberConfirmed { get; set; }
         public string? Password { get; set; }
         public bool IsActive { get; set; } = true;
+        public bool IsLocked { get; set; }
+        public DateTime? LockedUntilUtc { get; init; }
+        public int FailedLoginCount { get; init; }
+        public DateTime? LastFailedLoginUtc { get; init; }
+        public DateTime? LastLoginUtc { get; init; }
+        public string? LastLoginIpAddress { get; init; }
+        public bool TwoFactorEnabled { get; set; }
+        public bool TwoFactorRequiredForEveryLogin { get; set; } = true;
+        public TwoFactorMethodType PreferredTwoFactorMethod { get; set; } = TwoFactorMethodType.AuthenticatorApp;
+        public DateTime? TwoFactorEnabledUtc { get; init; }
+        public DateTime? TwoFactorLastUsedUtc { get; init; }
+        public bool MustChangePassword { get; set; }
+        public DateTime? PasswordExpiresUtc { get; init; }
+        public string? ExternalUserId { get; init; }
+        public string? Comment { get; set; }
         public bool IsAdmin { get; set; }
+    }
+
+    public sealed class UpdateUserProfileRequestModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Email { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? ExternalUserId { get; set; }
+        public string? Comment { get; set; }
+    }
+
+    public sealed class UserTwoFactorStatusViewModel
+    {
+        public Guid UserId { get; set; }
+        public bool TwoFactorEnabled { get; set; }
+        public bool TwoFactorRequiredForEveryLogin { get; set; }
+        public TwoFactorMethodType PreferredTwoFactorMethod { get; set; }
+        public DateTime? TwoFactorEnabledUtc { get; set; }
+        public DateTime? TwoFactorLastUsedUtc { get; set; }
+        public IReadOnlyList<UserTwoFactorMethodViewModel> Methods { get; set; } = [];
+    }
+
+    public sealed class UserTwoFactorMethodViewModel
+    {
+        public Guid Id { get; set; }
+        public TwoFactorMethodType MethodType { get; set; }
+        public bool IsEnabled { get; set; }
+        public bool IsConfirmed { get; set; }
+        public bool IsDefault { get; set; }
+        public string? MaskedDestination { get; set; }
+        public DateTime? ConfirmedUtc { get; set; }
+        public DateTime? LastUsedUtc { get; set; }
+    }
+
+    public sealed class UserLoginHistoryViewModel
+    {
+        public DateTime? LastLoginUtc { get; set; }
+        public string? LastLoginIpAddress { get; set; }
+        public DateTime? LastFailedLoginUtc { get; set; }
+        public int FailedLoginCount { get; set; }
+        public DateTime? TwoFactorLastUsedUtc { get; set; }
+        public DateTime? PasswordChangedUtc { get; set; }
+    }
+
+    public sealed class UserSecurityEventViewModel
+    {
+        public string EventType { get; set; } = string.Empty;
+        public DateTime? OccurredUtc { get; set; }
+        public string? Description { get; set; }
+    }
+
+    public sealed class ResetUserPasswordRequestModel
+    {
+        public string NewPassword { get; set; } = string.Empty;
+        public bool MustChangePassword { get; set; } = true;
+    }
+
+    public sealed class SetPreferredTwoFactorMethodRequestModel
+    {
+        public TwoFactorMethodType PreferredTwoFactorMethod { get; set; } = TwoFactorMethodType.AuthenticatorApp;
+    }
+
+    public sealed class SetTwoFactorRequiredRequestModel
+    {
+        public bool Required { get; set; }
+    }
+
+    public sealed class ChangePasswordRequestModel
+    {
+        public string OldPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
     }
 }

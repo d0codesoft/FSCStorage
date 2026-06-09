@@ -106,6 +106,7 @@ namespace scp.filestorage.webui.Auth
         {
             var claims = new List<Claim>
             {
+                new(ClaimTypes.NameIdentifier, user.Identifier), // The actual user ID is not included in the response, so we use a random value here. The presence of this claim indicates an authenticated user.
                 new(ClaimTypes.Name, user.Name),
                 new("auth_type", "web_user")
             };
@@ -214,6 +215,7 @@ namespace scp.filestorage.webui.Auth
             [property: JsonPropertyName("challengeExpiresUtc")] DateTime? ChallengeExpiresUtc);
 
         public sealed record MeResponse(
+            [property: JsonPropertyName("identifier")] string Identifier,
             [property: JsonPropertyName("name")] string Name,
             [property: JsonPropertyName("isAdmin")] bool IsAdmin,
             [property: JsonPropertyName("tenantId")] Guid? TenantId,

@@ -1,0 +1,137 @@
+@inject DialogService DialogService
+@inject AdminApiClient ApiClient
+
+<RadzenTemplateForm TItem="ApiTokenEditorModel" Data="@model" Submit="@SubmitAsync">
+    <DataAnnotationsValidator />
+
+    <RadzenStack Orientation="Orientation.Vertical" Gap="1rem" class="rz-p-4">
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+                @errorMessage
+            </RadzenAlert>
+        }
+
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+            <RadzenLabel Component="ApiKeyNameInput">
+                <RadzenIcon Icon="vpn_key" class="rz-mr-1" /> Name
+            </RadzenLabel>
+            <RadzenTextBox Name="ApiKeyNameInput" @bind-Value="model.Name" Disabled="@isBusy" Style="width: 100%;" />
+            <ValidationMessage For="@(() => model.Name)" />
+        </RadzenStack>
+
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+            <RadzenLabel Component="ApiKeyExpiresInput">
+                <RadzenIcon Icon="event" class="rz-mr-1" /> Expires UTC
+            </RadzenLabel>
+            <RadzenTextBox Name="ApiKeyExpiresInput"
+                           @bind-Value="model.ExpiresUtcText"
+                           Disabled="@isBusy"
+                           Placeholder="2026-06-10 12:00:00"
+                           Style="width: 100%;" />
+        </RadzenStack>
+
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="1rem" Wrap="FlexWrap.Wrap">
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenCheckBox Name="CanReadInput" @bind-Value="model.CanRead" Disabled="@isBusy" />
+                <RadzenLabel Component="CanReadInput" Text="Read" />
+            </RadzenStack>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenCheckBox Name="CanWriteInput" @bind-Value="model.CanWrite" Disabled="@isBusy" />
+                <RadzenLabel Component="CanWriteInput" Text="Write" />
+            </RadzenStack>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenCheckBox Name="CanDeleteInput" @bind-Value="model.CanDelete" Disabled="@isBusy" />
+                <RadzenLabel Component="CanDeleteInput" Text="Delete" />
+            </RadzenStack>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem">
+                <RadzenCheckBox Name="IsAdminInput" @bind-Value="model.IsAdmin" Disabled="@isBusy" />
+                <RadzenLabel Component="IsAdminInput" Text="Admin" />
+            </RadzenStack>
+        </RadzenStack>
+
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.75rem">
+            <RadzenButton Text="Cancel" ButtonStyle="ButtonStyle.Light" Click="@Cancel" Disabled="@isBusy" />
+            <RadzenButton Text="Create" Icon="add" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Disabled="@isBusy" IsBusy="@isBusy" />
+        </RadzenStack>
+    </RadzenStack>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid TenantId { get; set; }
+
+    private readonly ApiTokenEditorModel model = new();
+    private bool isBusy;
+    private string? errorMessage;
+
+    protected override void OnInitialized()
+    {
+        model.CanRead = true;
+    }
+
+    private Task Cancel()
+    {
+        DialogService.Close(null);
+        return Task.CompletedTask;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (!TryParseUtc(model.ExpiresUtcText, out var expiresUtc, out var validationError))
+        {
+            errorMessage = validationError;
+            return;
+        }
+
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            var created = await ApiClient.CreateTenantApiTokenAsync(TenantId, new CreateTenantApiTokenRequestModel
+            {
+                Name = model.Name,
+                CanRead = model.CanRead,
+                CanWrite = model.CanWrite,
+                CanDelete = model.CanDelete,
+                IsAdmin = model.IsAdmin,
+                ExpiresUtc = expiresUtc
+            });
+
+            DialogService.Close(created);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private static bool TryParseUtc(string? value, out DateTime? parsedUtc, out string? error)
+    {
+        parsedUtc = null;
+        error = null;
+
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        if (!DateTime.TryParse(value, out var parsed))
+        {
+            error = "Expires UTC must be a valid UTC date and time.";
+            return false;
+        }
+
+        parsedUtc = parsed.Kind switch
+        {
+            DateTimeKind.Utc => parsed,
+            DateTimeKind.Local => parsed.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+        };
+
+        return true;
+    }
+}

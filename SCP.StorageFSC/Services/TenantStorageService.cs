@@ -20,6 +20,9 @@ namespace SCP.StorageFSC.Services
         private readonly IStoredFileRepository _storedFileRepository;
         private readonly IDeletedTenantRepository _deletedTenantRepository;
         private readonly IPasswordHashService _passwordHashService;
+        private readonly IUserTwoFactorMethodRepository _twoFactorMethodRepository;
+        private readonly IUserRecoveryCodeRepository _recoveryCodeRepository;
+        private readonly IAuthenticationHashService _authenticationHashService;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly ILogger<TenantStorageService> _logger;
 
@@ -32,6 +35,9 @@ namespace SCP.StorageFSC.Services
             IStoredFileRepository storedFileRepository,
             IDeletedTenantRepository deletedTenantRepository,
             IPasswordHashService passwordHashService,
+            IUserTwoFactorMethodRepository twoFactorMethodRepository,
+            IUserRecoveryCodeRepository recoveryCodeRepository,
+            IAuthenticationHashService authenticationHashService,
             IHttpContextAccessor httpContextAccessor,
             ILogger<TenantStorageService> logger)
         {
@@ -43,8 +49,22 @@ namespace SCP.StorageFSC.Services
             _storedFileRepository = storedFileRepository;
             _deletedTenantRepository = deletedTenantRepository;
             _passwordHashService = passwordHashService;
+            _twoFactorMethodRepository = twoFactorMethodRepository;
+            _recoveryCodeRepository = recoveryCodeRepository;
+            _authenticationHashService = authenticationHashService;
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
+        }
+
+        private async Task FillUserInformationToDtoTenant(TenantDto tenantDto, CancellationToken cancellationToken)
+        {
+            var user = await _userRepository.GetByIdAsync(tenantDto.UserId, cancellationToken);
+            if (user is not null)
+            {
+                tenantDto.UserName = user.Name;
+                tenantDto.UserEmail = user.Email ?? string.Empty;
+                tenantDto.IsActiveUser = user.IsActive;
+            }
         }
 
         public async Task<TenantDto> CreateTenantAsync(
@@ -79,7 +99,10 @@ namespace SCP.StorageFSC.Services
                 entity.ExternalTenantId,
                 entity.Name);
 
-            return MapTenant(entity);
+            var result = MapTenant(entity);
+            await FillUserInformationToDtoTenant(result, cancellationToken);
+
+            return result;
         }
 
         public async Task<TenantDto?> UpdateTenantAsync(
@@ -117,7 +140,10 @@ namespace SCP.StorageFSC.Services
                 tenant.Name,
                 tenant.IsActive);
 
-            return MapTenant(tenant);
+            var result = MapTenant(tenant);
+            await FillUserInformationToDtoTenant(result, cancellationToken);
+
+            return result;
         }
 
         public async Task<TenantDto?> GetTenantByIdAsync(
@@ -127,7 +153,13 @@ namespace SCP.StorageFSC.Services
             var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken);
             await DemandAdminOrTenantOwnerAsync(tenant, cancellationToken);
 
-            return tenant is null ? null : MapTenant(tenant);
+            if (tenant is null)
+                return null;
+
+            var tenantDto = MapTenant(tenant);
+            await FillUserInformationToDtoTenant(tenantDto, cancellationToken);
+
+            return tenantDto;
         }
 
         public async Task<TenantDto?> GetTenantByGuidAsync(
@@ -137,7 +169,13 @@ namespace SCP.StorageFSC.Services
             var tenant = await _tenantRepository.GetByGuidAsync(tenantGuid, cancellationToken);
             await DemandAdminOrTenantOwnerAsync(tenant, cancellationToken);
 
-            return tenant is null ? null : MapTenant(tenant);
+            if (tenant is null)
+                return null;
+
+            var tenantDto = MapTenant(tenant);
+            await FillUserInformationToDtoTenant(tenantDto, cancellationToken);
+
+            return tenantDto;
         }
 
         public async Task<IReadOnlyList<TenantDto>> GetTenantsAsync(
@@ -155,7 +193,45 @@ namespace SCP.StorageFSC.Services
                 tenants = await _tenantRepository.GetByUserIdAsync(userId, cancellationToken);
             }
 
-            return tenants.Select(MapTenant).ToList();
+            var result = tenants.Select(MapTenant).ToList();
+
+            foreach (var tenantDto in result)
+            {
+                await FillUserInformationToDtoTenant(tenantDto, cancellationToken);
+            }
+
+            return result;
+        }
+
+        public async Task<IReadOnlyList<StoredTenantFileDto>> GetTenantFilesAsync(
+            Guid tenantId,
+            CancellationToken cancellationToken = default)
+        {
+            var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken);
+            await DemandAdminOrTenantOwnerAsync(tenant, cancellationToken);
+
+            if (tenant is null)
+                return [];
+
+            var tenantFiles = await _tenantFileRepository.GetByTenantIdAsync(
+                tenant.Id,
+                cancellationToken);
+
+            var result = new List<StoredTenantFileDto>(tenantFiles.Count);
+
+            foreach (var tenantFile in tenantFiles)
+            {
+                var storedFile = await _storedFileRepository.GetByIdAsync(
+                    tenantFile.StoredFileId,
+                    cancellationToken);
+
+                if (storedFile is null || storedFile.IsDeleted)
+                    continue;
+
+                result.Add(MapTenantFile(tenantFile, storedFile));
+            }
+
+            return result;
         }
 
         public async Task<IReadOnlyList<UserTenantsDto>> GetUsersWithTenantsAsync(
@@ -169,13 +245,39 @@ namespace SCP.StorageFSC.Services
                 .GroupBy(tenant => tenant.UserId)
                 .ToDictionary(group => group.Key, group => (IReadOnlyList<TenantDto>)group.Select(MapTenant).ToList());
 
+            foreach (var tenantList in tenantsByUserId.Values)
+            {
+                foreach (var tenantDto in tenantList)
+                {
+                    await FillUserInformationToDtoTenant(tenantDto, cancellationToken);
+                }
+            }
+
             return users
                 .Select(user => new UserTenantsDto
                 {
                     UserId = user.Id,
                     UserName = user.Name,
                     Email = user.Email,
+                    PhoneNumber = user.PhoneNumber,
+                    PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                     IsActive = user.IsActive,
+                    IsLocked = user.IsLocked && (!user.LockedUntilUtc.HasValue || user.LockedUntilUtc > DateTime.UtcNow),
+                    LockedUntilUtc = user.LockedUntilUtc,
+                    FailedLoginCount = user.FailedLoginCount,
+                    LastFailedLoginUtc = user.LastFailedLoginUtc,
+                    LastLoginUtc = user.LastLoginUtc,
+                    LastLoginIpAddress = user.LastLoginIpAddress,
+                    TwoFactorEnabled = user.TwoFactorEnabled,
+                    TwoFactorRequiredForEveryLogin = user.TwoFactorRequiredForEveryLogin,
+                    PreferredTwoFactorMethod = user.PreferredTwoFactorMethod,
+                    TwoFactorEnabledUtc = user.TwoFactorEnabledUtc,
+                    TwoFactorLastUsedUtc = user.TwoFactorLastUsedUtc,
+                    MustChangePassword = user.MustChangePassword,
+                    PasswordChangedUtc = user.PasswordChangedUtc,
+                    PasswordExpiresUtc = user.PasswordExpiresUtc,
+                    ExternalUserId = user.ExternalUserId,
+                    Comment = user.Comment,
                     Tenants = tenantsByUserId.TryGetValue(user.Id, out var userTenants)
                         ? userTenants
                         : []
@@ -210,6 +312,14 @@ namespace SCP.StorageFSC.Services
                 .GroupBy(tenant => tenant.UserId)
                 .ToDictionary(group => group.Key, group => (IReadOnlyList<TenantDto>)group.Select(MapTenant).ToList());
 
+            foreach (var tenantList in tenantsByUserId.Values)
+            {
+                foreach (var tenantDto in tenantList)
+                {
+                    await FillUserInformationToDtoTenant(tenantDto, cancellationToken);
+                }
+            }
+
             var tenantNamesById = tenants.ToDictionary(x => x.Id, x => x.Name);
             var tokensByUserId = tokens
                 .GroupBy(token => token.UserId)
@@ -229,9 +339,25 @@ namespace SCP.StorageFSC.Services
                     UserId = user.Id,
                     UserName = user.Name,
                     Email = user.Email,
+                    PhoneNumber = user.PhoneNumber,
+                    PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                     IsActive = user.IsActive,
                     IsLocked = user.IsLocked && (!user.LockedUntilUtc.HasValue || user.LockedUntilUtc > DateTime.UtcNow),
                     LockedUntilUtc = user.LockedUntilUtc,
+                    FailedLoginCount = user.FailedLoginCount,
+                    LastFailedLoginUtc = user.LastFailedLoginUtc,
+                    LastLoginUtc = user.LastLoginUtc,
+                    LastLoginIpAddress = user.LastLoginIpAddress,
+                    TwoFactorEnabled = user.TwoFactorEnabled,
+                    TwoFactorRequiredForEveryLogin = user.TwoFactorRequiredForEveryLogin,
+                    PreferredTwoFactorMethod = user.PreferredTwoFactorMethod,
+                    TwoFactorEnabledUtc = user.TwoFactorEnabledUtc,
+                    TwoFactorLastUsedUtc = user.TwoFactorLastUsedUtc,
+                    MustChangePassword = user.MustChangePassword,
+                    PasswordChangedUtc = user.PasswordChangedUtc,
+                    PasswordExpiresUtc = user.PasswordExpiresUtc,
+                    ExternalUserId = user.ExternalUserId,
+                    Comment = user.Comment,
                     IsAdmin = rolesByUserId.TryGetValue(user.Id, out var isAdmin) && isAdmin,
                     CreatedUtc = user.CreatedUtc,
                     UpdatedUtc = user.UpdatedUtc,
@@ -266,15 +392,23 @@ namespace SCP.StorageFSC.Services
                 NormalizedName = normalizedUserName,
                 Email = NormalizeNullableText(request.Email),
                 NormalizedEmail = normalizedEmail,
+                PhoneNumber = NormalizeNullableText(request.PhoneNumber),
                 PasswordHash = string.Empty,
                 IsActive = request.IsActive,
+                MustChangePassword = request.MustChangePassword,
                 TwoFactorEnabled = false,
                 TwoFactorRequiredForEveryLogin = false,
                 PreferredTwoFactorMethod = TwoFactorMethodType.None,
                 CreatedUtc = DateTime.UtcNow
             };
 
-            user.PasswordHash = _passwordHashService.HashPassword(user, request.Password);
+            var password = string.IsNullOrWhiteSpace(request.TemporaryPassword)
+                ? request.Password
+                : request.TemporaryPassword;
+            if (string.IsNullOrWhiteSpace(password))
+                throw new ArgumentException("Temporary password is required.", nameof(request));
+
+            user.PasswordHash = _passwordHashService.HashPassword(user, password);
             user.PasswordChangedUtc = DateTime.UtcNow;
 
             var created = await _userRepository.InsertAsync(user, cancellationToken);
@@ -295,9 +429,27 @@ namespace SCP.StorageFSC.Services
             return await GetUserManagementAsync(user, cancellationToken);
         }
 
+        public async Task<UserManagementDto?> GetUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            return user is null ? null : await GetUserManagementAsync(user, cancellationToken);
+        }
+
         public async Task<UserManagementDto?> UpdateUserAsync(
             Guid userId,
             UpdateUserRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return await UpdateUserProfileAsync(userId, request, cancellationToken);
+        }
+
+        public async Task<UserManagementDto?> UpdateUserProfileAsync(
+            Guid userId,
+            UpdateUserProfileRequest request,
             CancellationToken cancellationToken = default)
         {
             EnsureAdmin();
@@ -321,24 +473,20 @@ namespace SCP.StorageFSC.Services
                     throw new InvalidOperationException($"User with email '{request.Email}' already exists.");
             }
 
-            var currentlyAdmin = await _userRoleRepository.UserHasRoleAsync(user.Id, SystemRoles.AdministratorId, cancellationToken);
-            if (currentlyAdmin && !request.IsAdmin)
-            {
-                await EnsureMoreThanOneAdminAsync(user.Id, cancellationToken);
-            }
-
             user.Name = userName;
             user.NormalizedName = normalizedUserName;
-            user.Email = NormalizeNullableText(request.Email);
-            user.NormalizedEmail = normalizedEmail;
-            user.IsActive = request.IsActive;
-
-            if (!string.IsNullOrWhiteSpace(request.Password))
+            var email = NormalizeNullableText(request.Email);
+            if (!string.Equals(user.Email, email, StringComparison.Ordinal))
             {
-                user.PasswordHash = _passwordHashService.HashPassword(user, request.Password);
-                user.PasswordChangedUtc = DateTime.UtcNow;
+                user.EmailConfirmed = false;
                 user.SecurityStamp = Guid.NewGuid().ToString("N");
             }
+
+            user.Email = email;
+            user.NormalizedEmail = normalizedEmail;
+            user.PhoneNumber = NormalizeNullableText(request.PhoneNumber);
+            user.ExternalUserId = NormalizeNullableText(request.ExternalUserId);
+            user.Comment = NormalizeNullableText(request.Comment);
 
             user.MarkUpdated();
 
@@ -346,14 +494,12 @@ namespace SCP.StorageFSC.Services
             if (!updated)
                 return null;
 
-            await EnsureAdminRoleAsync(user.Id, request.IsAdmin, cancellationToken);
-
             _logger.LogInformation(
                 "User updated. UserId={UserId}, UserName={UserName}, IsActive={IsActive}, IsAdmin={IsAdmin}",
                 user.Id,
                 user.Name,
                 user.IsActive,
-                request.IsAdmin);
+                await _userRoleRepository.UserHasRoleAsync(user.Id, SystemRoles.AdministratorId, cancellationToken));
 
             return await GetUserManagementAsync(user, cancellationToken);
         }
@@ -384,6 +530,433 @@ namespace SCP.StorageFSC.Services
             }
 
             return updated;
+        }
+
+        public async Task<bool> ActivateUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await SetUserActiveAsync(userId, true, cancellationToken);
+        }
+
+        public async Task<bool> DeactivateUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return await SetUserActiveAsync(userId, false, cancellationToken);
+        }
+
+        public async Task<bool> LockUserAsync(
+            Guid userId,
+            DateTime lockedUntilUtc,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.IsLocked = true;
+            user.LockedUntilUtc = lockedUntilUtc.Kind == DateTimeKind.Utc
+                ? lockedUntilUtc
+                : lockedUntilUtc.ToUniversalTime();
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> UnlockUserAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.IsLocked = false;
+            user.LockedUntilUtc = null;
+            user.FailedLoginCount = 0;
+            user.LastFailedLoginUtc = null;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ResetFailedLoginCountAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.FailedLoginCount = 0;
+            user.LastFailedLoginUtc = null;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ResetUserPasswordAsync(
+            Guid userId,
+            ResetUserPasswordRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+                throw new ArgumentException("New password is required.", nameof(request));
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.PasswordHash = _passwordHashService.HashPassword(user, request.NewPassword);
+            user.PasswordChangedUtc = DateTime.UtcNow;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.FailedLoginCount = 0;
+            user.LastFailedLoginUtc = null;
+            user.MustChangePassword = request.MustChangePassword;
+            user.PasswordExpiresUtc = null;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ExpireUserPasswordAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.MustChangePassword = true;
+            user.PasswordExpiresUtc = DateTime.UtcNow;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ChangeUserEmailAsync(Guid userId, string email, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var normalizedEmail = NormalizeEmail(email)
+                ?? throw new ArgumentException("Email is required.", nameof(email));
+
+            var existing = await _userRepository.GetByNormalizedEmailAsync(normalizedEmail, cancellationToken);
+            if (existing is not null && existing.Id != userId)
+                throw new InvalidOperationException($"User with email '{email}' already exists.");
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.Email = NormalizeNullableText(email);
+            user.NormalizedEmail = normalizedEmail;
+            user.EmailConfirmed = false;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> SetUserEmailConfirmedAsync(Guid userId, bool confirmed, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.EmailConfirmed = confirmed;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ChangeUserPhoneAsync(Guid userId, string phoneNumber, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            if (string.IsNullOrWhiteSpace(phoneNumber))
+                throw new ArgumentException("Phone number is required.", nameof(phoneNumber));
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.PhoneNumber = NormalizeNullableText(phoneNumber);
+            user.PhoneNumberConfirmed = false;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> SetUserPhoneConfirmedAsync(Guid userId, bool confirmed, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.PhoneNumberConfirmed = confirmed;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<UserTwoFactorStatusDto?> GetUserTwoFactorStatusAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return null;
+
+            var methods = await _twoFactorMethodRepository.GetByUserIdAsync(userId, cancellationToken);
+            return new UserTwoFactorStatusDto
+            {
+                UserId = user.Id,
+                TwoFactorEnabled = user.TwoFactorEnabled,
+                TwoFactorRequiredForEveryLogin = user.TwoFactorRequiredForEveryLogin,
+                PreferredTwoFactorMethod = user.PreferredTwoFactorMethod,
+                TwoFactorEnabledUtc = user.TwoFactorEnabledUtc,
+                TwoFactorLastUsedUtc = user.TwoFactorLastUsedUtc,
+                Methods = methods.Select(method => new UserTwoFactorMethodDto
+                {
+                    Id = method.Id,
+                    MethodType = method.MethodType,
+                    IsEnabled = method.IsEnabled,
+                    IsConfirmed = method.IsConfirmed,
+                    IsDefault = method.IsDefault,
+                    MaskedDestination = method.MaskedDestination,
+                    ConfirmedUtc = method.ConfirmedUtc,
+                    LastUsedUtc = method.LastUsedUtc
+                }).ToList()
+            };
+        }
+
+        public async Task<bool> EnableUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.TwoFactorEnabled = true;
+            user.TwoFactorEnabledUtc ??= DateTime.UtcNow;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> DisableUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            var methods = await _twoFactorMethodRepository.GetByUserIdAsync(user.Id, cancellationToken);
+            foreach (var method in methods)
+            {
+                method.IsEnabled = false;
+                method.IsDefault = false;
+                method.MarkUpdated();
+                await _twoFactorMethodRepository.UpdateAsync(method, cancellationToken);
+            }
+
+            user.TwoFactorEnabled = false;
+            user.TwoFactorEnabledUtc = null;
+            user.TwoFactorLastUsedUtc = null;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> SetUserPreferredTwoFactorMethodAsync(
+            Guid userId,
+            SetPreferredTwoFactorMethodRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.PreferredTwoFactorMethod = request.PreferredTwoFactorMethod;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> SetUserTwoFactorRequiredForEveryLoginAsync(
+            Guid userId,
+            bool required,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.TwoFactorRequiredForEveryLogin = required;
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<bool> ResetUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            var methods = await _twoFactorMethodRepository.GetByUserIdAsync(user.Id, cancellationToken);
+            foreach (var method in methods)
+            {
+                await _twoFactorMethodRepository.DeleteAsync(method.Id, cancellationToken);
+            }
+
+            await _recoveryCodeRepository.DeleteByUserIdAsync(user.Id, cancellationToken);
+
+            user.TwoFactorEnabled = false;
+            user.TwoFactorEnabledUtc = null;
+            user.TwoFactorLastUsedUtc = null;
+            user.PreferredTwoFactorMethod = TwoFactorMethodType.None;
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<string[]> RegenerateUserRecoveryCodesAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return [];
+
+            var codes = Enumerable.Range(0, 10)
+                .Select(_ => CreateRecoveryCode())
+                .ToArray();
+
+            await _recoveryCodeRepository.DeleteByUserIdAsync(user.Id, cancellationToken);
+            await _recoveryCodeRepository.InsertManyAsync(
+                codes.Select(code => new UserRecoveryCode
+                {
+                    UserId = user.Id,
+                    CodeHash = _authenticationHashService.HashSecret(code),
+                    CreatedUtc = DateTime.UtcNow
+                }),
+                cancellationToken);
+
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+            await _userRepository.UpdateAsync(user, cancellationToken);
+
+            return codes;
+        }
+
+        public async Task<bool> RefreshUserSecurityStampAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<UserSessionDto>?> GetUserSessionsAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+            return await _userRepository.GetByIdAsync(userId, cancellationToken) is null
+                ? null
+                : [];
+        }
+
+        public async Task<IReadOnlyList<UserLoginHistoryDto>?> GetUserLoginHistoryAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return null;
+
+            return
+            [
+                new UserLoginHistoryDto
+                {
+                    LastLoginUtc = user.LastLoginUtc,
+                    LastLoginIpAddress = user.LastLoginIpAddress,
+                    LastFailedLoginUtc = user.LastFailedLoginUtc,
+                    FailedLoginCount = user.FailedLoginCount,
+                    TwoFactorLastUsedUtc = user.TwoFactorLastUsedUtc,
+                    PasswordChangedUtc = user.PasswordChangedUtc
+                }
+            ];
+        }
+
+        public async Task<IReadOnlyList<UserSecurityEventDto>?> GetUserSecurityEventsAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return null;
+
+            var events = new List<UserSecurityEventDto>();
+            AddSecurityEvent(events, "UserCreated", user.CreatedUtc, "User account was created.");
+            AddSecurityEvent(events, "UserUpdated", user.UpdatedUtc, "User account was updated.");
+            AddSecurityEvent(events, "PasswordChanged", user.PasswordChangedUtc, "User password was changed.");
+            AddSecurityEvent(events, "LastLogin", user.LastLoginUtc, "User completed a login.");
+            AddSecurityEvent(events, "LastFailedLogin", user.LastFailedLoginUtc, "User had a failed login attempt.");
+            AddSecurityEvent(events, "TwoFactorLastUsed", user.TwoFactorLastUsedUtc, "Two-factor authentication was used.");
+
+            return events.OrderByDescending(item => item.OccurredUtc).ToList();
+        }
+
+        public Task<IReadOnlyList<UserSecurityEventDto>?> GetUserAuditAsync(Guid userId, CancellationToken cancellationToken = default)
+        {
+            return GetUserSecurityEventsAsync(userId, cancellationToken);
+        }
+
+        public async Task<bool> IsUserNameUniqueAsync(string name, Guid? excludingUserId = null, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var normalizedName = Normalize(ValidateUserName(name));
+            var user = await _userRepository.GetByNormalizedNameAsync(normalizedName, cancellationToken);
+            return user is null || user.Id == excludingUserId;
+        }
+
+        public async Task<bool> IsUserEmailUniqueAsync(string email, Guid? excludingUserId = null, CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var normalizedEmail = NormalizeEmail(email)
+                ?? throw new ArgumentException("Email is required.", nameof(email));
+
+            var user = await _userRepository.GetByNormalizedEmailAsync(normalizedEmail, cancellationToken);
+            return user is null || user.Id == excludingUserId;
         }
 
         public async Task<bool> DeleteUserAsync(
@@ -532,6 +1105,30 @@ namespace SCP.StorageFSC.Services
             };
         }
 
+        public async Task<CreatedApiTokenResult?> CreateTenantApiTokenAsync(
+            Guid tenantId,
+            CreateTenantApiTokenRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var tenant = await _tenantRepository.GetByIdAsync(tenantId, cancellationToken);
+            if (tenant is null)
+                return null;
+
+            return await CreateApiTokenAsync(new CreateApiTokenRequest
+            {
+                UserId = tenant.UserId,
+                TenantId = tenant.Id,
+                Name = request.Name,
+                CanRead = request.CanRead,
+                CanWrite = request.CanWrite,
+                CanDelete = request.CanDelete,
+                IsAdmin = request.IsAdmin,
+                ExpiresUtc = request.ExpiresUtc
+            }, cancellationToken);
+        }
+
         public async Task<ApiTokenDto?> UpdateApiTokenAsync(
             Guid tokenId,
             UpdateApiTokenRequest request,
@@ -634,6 +1231,20 @@ namespace SCP.StorageFSC.Services
             return await _apiTokenRepository.DeleteAsync(tokenId, cancellationToken);
         }
 
+        public async Task<bool> DeleteTenantApiTokenAsync(
+            Guid tenantId,
+            Guid tokenId,
+            CancellationToken cancellationToken = default)
+        {
+            EnsureAdmin();
+
+            var token = await _apiTokenRepository.GetByIdAsync(tokenId, cancellationToken);
+            if (token is null || token.TenantId != tenantId)
+                return false;
+
+            return await _apiTokenRepository.DeleteAsync(tokenId, cancellationToken);
+        }
+
         public async Task<CreatedApiTokenResult?> RotateApiTokenAsync(
             Guid tokenId,
             CancellationToken cancellationToken = default)
@@ -678,6 +1289,57 @@ namespace SCP.StorageFSC.Services
                 Token = MapToken(replacement),
                 PlainTextToken = plainTextToken
             };
+        }
+
+        private async Task<bool> SetUserActiveAsync(
+            Guid userId,
+            bool isActive,
+            CancellationToken cancellationToken)
+        {
+            EnsureAdmin();
+
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+            if (user is null)
+                return false;
+
+            if (!isActive && await _userRoleRepository.UserHasRoleAsync(userId, SystemRoles.AdministratorId, cancellationToken))
+            {
+                await EnsureMoreThanOneAdminAsync(userId, cancellationToken);
+            }
+
+            user.IsActive = isActive;
+            if (!isActive)
+            {
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
+            }
+
+            user.MarkUpdated();
+
+            return await _userRepository.UpdateAsync(user, cancellationToken);
+        }
+
+        private static void AddSecurityEvent(
+            ICollection<UserSecurityEventDto> events,
+            string eventType,
+            DateTime? occurredUtc,
+            string description)
+        {
+            if (!occurredUtc.HasValue)
+                return;
+
+            events.Add(new UserSecurityEventDto
+            {
+                EventType = eventType,
+                OccurredUtc = occurredUtc,
+                Description = description
+            });
+        }
+
+        private static string CreateRecoveryCode()
+        {
+            Span<byte> bytes = stackalloc byte[9];
+            System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
+            return Convert.ToHexString(bytes).ToLowerInvariant();
         }
 
         private void EnsureAdmin()
@@ -754,9 +1416,25 @@ namespace SCP.StorageFSC.Services
                 UserId = user.Id,
                 UserName = user.Name,
                 Email = user.Email,
+                PhoneNumber = user.PhoneNumber,
+                PhoneNumberConfirmed = user.PhoneNumberConfirmed,
                 IsActive = user.IsActive,
                 IsLocked = user.IsLocked && (!user.LockedUntilUtc.HasValue || user.LockedUntilUtc > DateTime.UtcNow),
                 LockedUntilUtc = user.LockedUntilUtc,
+                FailedLoginCount = user.FailedLoginCount,
+                LastFailedLoginUtc = user.LastFailedLoginUtc,
+                LastLoginUtc = user.LastLoginUtc,
+                LastLoginIpAddress = user.LastLoginIpAddress,
+                TwoFactorEnabled = user.TwoFactorEnabled,
+                TwoFactorRequiredForEveryLogin = user.TwoFactorRequiredForEveryLogin,
+                PreferredTwoFactorMethod = user.PreferredTwoFactorMethod,
+                TwoFactorEnabledUtc = user.TwoFactorEnabledUtc,
+                TwoFactorLastUsedUtc = user.TwoFactorLastUsedUtc,
+                MustChangePassword = user.MustChangePassword,
+                PasswordChangedUtc = user.PasswordChangedUtc,
+                PasswordExpiresUtc = user.PasswordExpiresUtc,
+                ExternalUserId = user.ExternalUserId,
+                Comment = user.Comment,
                 IsAdmin = isAdmin,
                 CreatedUtc = user.CreatedUtc,
                 UpdatedUtc = user.UpdatedUtc,
@@ -872,6 +1550,26 @@ namespace SCP.StorageFSC.Services
                 IsActive = tenant.IsActive,
                 CreatedUtc = tenant.CreatedUtc,
                 UpdatedUtc = tenant.UpdatedUtc
+            };
+        }
+
+        private static StoredTenantFileDto MapTenantFile(TenantFile tenantFile, StoredFile storedFile)
+        {
+            return new StoredTenantFileDto
+            {
+                TenantFileId = tenantFile.Id,
+                FileGuid = tenantFile.FileGuid,
+                TenantId = tenantFile.TenantId,
+                StoredFileId = tenantFile.StoredFileId,
+                FileName = tenantFile.FileName,
+                Category = tenantFile.Category,
+                ExternalKey = tenantFile.ExternalKey,
+                ContentType = storedFile.ContentType,
+                StateCompress = storedFile.StateCompress,
+                FileSize = storedFile.FileSize,
+                Sha256 = storedFile.Sha256,
+                Crc32 = storedFile.Crc32,
+                CreatedUtc = tenantFile.CreatedUtc
             };
         }
 

@@ -1,0 +1,221 @@
+@page "/users/{UserId:guid}"
+@attribute [Authorize(Roles = "Admin")]
+@inject AdminApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject DialogService DialogService
+@inject CurrentUserService CurrentUserService
+
+<PageTitle>User details</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>@(user?.UserName ?? "User details")</h1>
+        <p>Edit profile data, two-factor authentication, and security state.</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToUsers" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+        @if (user is not null && currentUser?.UserId == user.UserId)
+        {
+            <RadzenButton Text="Change password" Icon="lock" Click="@ChangePasswordAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Info" />
+        }
+        @if (user is not null && currentUser?.UserId != user.UserId)
+        {
+            <RadzenButton Text="Delete" Icon="delete" Click="@DeleteUserAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Danger" />
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (isBusy && user is null)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else if (notFound)
+{
+    <RadzenCard class="empty-panel">
+        <RadzenIcon Icon="person_off" />
+        <span>User was not found.</span>
+    </RadzenCard>
+}
+else if (user is not null)
+{
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Center" Gap="0.5rem" class="rz-pt-2 rz-pb-4">
+        <RadzenSelectBar @bind-Value="@tabPosition"
+                         TextProperty="Text"
+                         ValueProperty="Value"
+                         Data="@tabPositionOptions"
+                         Size="ButtonSize.Small"
+                         class="rz-display-none rz-display-xl-flex" />
+        <RadzenDropDown @bind-Value="@tabPosition"
+                        TextProperty="Text"
+                        ValueProperty="Value"
+                        Data="@tabPositionOptions"
+                        class="rz-display-flex rz-display-xl-none" />
+    </RadzenStack>
+
+    <RadzenTabs Change="@OnTabChanged" TabPosition="@tabPosition" RenderMode="TabRenderMode.Client" class="user-detail-tabs">
+        <Tabs>
+            <RadzenTabsItem Text="General">
+                <RadzenCard class="details-panel">
+                    <div class="details-header">
+                        <h2>General data</h2>
+                        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap">
+                            <RadzenBadge BadgeStyle="@(user.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(user.IsActive ? "Active" : "Inactive")" />
+                            <RadzenBadge BadgeStyle="@(user.IsLocked ? BadgeStyle.Warning : BadgeStyle.Light)" Text="@(user.IsLocked ? "Locked" : "Unlocked")" />
+                            <RadzenBadge BadgeStyle="@(user.IsAdmin ? BadgeStyle.Info : BadgeStyle.Light)" Text="@(user.IsAdmin ? "Admin" : "User")" />
+                        </RadzenStack>
+                    </div>
+                    <UserGeneralForm User="@user"
+                                     CanManageAccount="@(currentUser?.UserId != user.UserId)"
+                                     UserChanged="@OnUserChangedAsync" />
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="2FA">
+                <RadzenCard class="details-panel">
+                    <div class="details-header">
+                        <h2>Two-factor authentication</h2>
+                        <RadzenBadge BadgeStyle="@(user.TwoFactorEnabled ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(user.TwoFactorEnabled ? "Enabled" : "Disabled")" />
+                    </div>
+                    <UserTwoFactorForm UserId="@user.UserId" Changed="@ReloadUserAsync" />
+                </RadzenCard>
+            </RadzenTabsItem>
+
+            <RadzenTabsItem Text="Other">
+                <UserOtherDataPanel User="@user" Changed="@ReloadUserAsync" />
+            </RadzenTabsItem>
+        </Tabs>
+    </RadzenTabs>
+}
+
+@code {
+    [Parameter]
+    public Guid UserId { get; set; }
+
+    private CurrentUserContext? currentUser;
+    private UserManagementViewModel? user;
+    private bool isBusy;
+    private bool notFound;
+    private string? errorMessage;
+    private TabPosition tabPosition = TabPosition.Top;
+    private int selectedTabIndex;
+
+    private readonly IReadOnlyList<object> tabPositionOptions = Enum
+        .GetValues<TabPosition>()
+        .Select(value => new { Text = value.ToString(), Value = value })
+        .Cast<object>()
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUser = await CurrentUserService.GetAsync();
+    }
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isBusy = true;
+        errorMessage = null;
+        notFound = false;
+
+        try
+        {
+            user = await ApiClient.GetUserAsync(UserId);
+            notFound = user is null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ReloadUserAsync()
+    {
+        var updated = await ApiClient.GetUserAsync(UserId);
+        if (updated is not null)
+            user = updated;
+    }
+
+    private Task OnUserChangedAsync(UserManagementViewModel updated)
+    {
+        user = updated;
+        return Task.CompletedTask;
+    }
+
+    private void OnTabChanged(int index)
+    {
+        selectedTabIndex = index;
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        if (user is null)
+            return;
+
+        var dialogResult = await DialogService.OpenAsync(
+            $"Change password for {user.UserName}",
+            typeof(ChangePasswordDialog),
+            new Dictionary<string, object?>
+            {
+                [nameof(ChangePasswordDialog.UserName)] = user.UserName
+            },
+            new DialogOptions
+            {
+                Width = "420px",
+                CloseDialogOnEsc = true,
+                CloseDialogOnOverlayClick = false,
+                ShowClose = true
+            });
+
+        if (dialogResult is true)
+            await ReloadUserAsync();
+    }
+
+    private async Task DeleteUserAsync()
+    {
+        if (user is null)
+            return;
+
+        var confirmed = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Delete user '{user.UserName}' with all linked tenants and API keys? Physical files will be removed by a separate maintenance task.");
+
+        if (!confirmed)
+            return;
+
+        isBusy = true;
+        errorMessage = null;
+
+        try
+        {
+            await ApiClient.DeleteUserAsync(user.UserId);
+            Navigation.NavigateTo("/users");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BackToUsers()
+    {
+        Navigation.NavigateTo("/users");
+    }
+}

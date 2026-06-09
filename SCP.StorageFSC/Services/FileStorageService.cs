@@ -83,6 +83,13 @@ namespace SCP.StorageFSC.Services
                     "File name is required.");
             }
 
+            TenantFile? tenantFile = null;
+            if (!string.IsNullOrEmpty(request.ExternalKey))
+            {
+                tenantFile = await _tenantFileRepository.GetByExternalKeyAsync(tenantId, request.ExternalKey, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             var tempPath = Path.Combine(_options.DataPath, $".tmp_{Guid.NewGuid():N}");
 
             try
@@ -98,21 +105,42 @@ namespace SCP.StorageFSC.Services
                     request.ContentType,
                     cancellationToken);
 
-                var tenantFile = new TenantFile
+                if (tenantFile == null)
                 {
-                    TenantId = tenantId,
-                    StoredFileId = storedFile.Id,
-                    FileGuid = Guid.NewGuid(),
-                    FileName = request.FileName,
-                    Category = request.Category,
-                    ExternalKey = request.ExternalKey,
-                    IsActive = true,
-                    CreatedUtc = DateTime.UtcNow
-                };
+                    tenantFile = new TenantFile
+                    {
+                        TenantId = tenantId,
+                        StoredFileId = storedFile.Id,
+                        FileGuid = Guid.NewGuid(),
+                        FileName = request.FileName,
+                        Category = request.Category,
+                        ExternalKey = request.ExternalKey,
+                        IsActive = true,
+                        CreatedUtc = DateTime.UtcNow
+                    };
 
-                _ = await _tenantFileRepository.InsertAsync(
-                    tenantFile,
-                    cancellationToken);
+                    _ = await _tenantFileRepository.InsertAsync(
+                        tenantFile,
+                        cancellationToken);
+                }
+                else
+                {
+                    if (tenantFile.StoredFileId != storedFile.Id)
+                    {
+                        await _storedFileRepository.DecrementReferenceCountAsync(
+                            tenantFile.StoredFileId,
+                            cancellationToken);
+                    }
+                    tenantFile.StoredFileId = storedFile.Id;
+                    tenantFile.FileName = request.FileName;
+                    tenantFile.Category = request.Category;
+                    tenantFile.IsActive = true;
+                    tenantFile.DeletedUtc = null;
+
+                    _ = await _tenantFileRepository.UpdateAsync(
+                        tenantFile,
+                        cancellationToken);
+                }
 
                 _logger.LogInformation(
                     "Tenant file link created. TenantFileId={TenantFileId}, TenantId={TenantId}, StoredFileId={StoredFileId}, FileGuid={FileGuid}",

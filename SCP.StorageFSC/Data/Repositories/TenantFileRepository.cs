@@ -524,5 +524,102 @@ namespace SCP.StorageFSC.Data.Repositories
                 throw new RepositoryException($"Failed to delete tenant file '{id}' due to database error.", ex);
             }
         }
+
+        public async Task<TenantFile?> GetByExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                SELECT
+                    id AS Id,
+                    tenant_id AS TenantId,
+                    stored_file_id AS StoredFileId,
+                    file_guid AS FileGuid,
+                    file_name AS FileName,
+                    category AS Category,
+                    external_key AS ExternalKey,
+                    is_active AS IsActive,
+                    created_utc AS CreatedUtc,
+                    updated_utc AS UpdatedUtc,
+                    row_version AS RowVersion,
+                    deleted_utc AS DeletedUtc
+                FROM tenant_files
+                WHERE tenant_id = @TenantId
+                  AND external_key = @ExternalKey
+                  AND is_active = 1
+                LIMIT 1;
+                """;
+            try
+            {
+                using var connection = _connectionFactory.CreateConnection();
+                return await connection.QuerySingleOrDefaultAsync<TenantFile>(new CommandDefinition(
+                    sql,
+                    new { TenantId = tenantId, ExternalKey = externalKey },
+                    cancellationToken: cancellationToken));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant file by external key '{externalKey}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to load tenant file by external key '{externalKey}' due to database error.", ex);
+            }
+        }
+
+        public async Task<bool> UpdateAsync(TenantFile tenantFile, CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+                UPDATE tenant_files
+                SET
+                    tenant_id = @TenantId,
+                    stored_file_id = @StoredFileId,
+                    file_guid = @FileGuid,
+                    file_name = @FileName,
+                    category = @Category,
+                    external_key = @ExternalKey,
+                    is_active = @IsActive,
+                    updated_utc = @UpdatedUtc,
+                    row_version = @RowVersion
+                WHERE id = @Id
+                  AND is_active = 1;
+                """;
+            try
+            {
+                tenantFile.MarkUpdated();
+                using var connection = _connectionFactory.CreateConnection();
+                var affected = await connection.ExecuteAsync(new CommandDefinition(
+                    sql,
+                    new
+                    {
+                        tenantFile.Id,
+                        tenantFile.TenantId,
+                        tenantFile.StoredFileId,
+                        tenantFile.FileGuid,
+                        tenantFile.FileName,
+                        tenantFile.Category,
+                        tenantFile.ExternalKey,
+                        IsActive = tenantFile.IsActive ? 1 : 0,
+                        tenantFile.UpdatedUtc,
+                        tenantFile.RowVersion
+                    },
+                    cancellationToken: cancellationToken));
+                return affected > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (DataException ex)
+            {
+                throw new RepositoryException($"Failed to update tenant file '{tenantFile.Id}' due to data mapping error.", ex);
+            }
+            catch (SqliteException ex)
+            {
+                throw new RepositoryException($"Failed to update tenant file '{tenantFile.Id}' due to database error.", ex);
+            }
+        }
     }
 }

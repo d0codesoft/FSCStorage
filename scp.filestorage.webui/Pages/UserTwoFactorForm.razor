@@ -1,0 +1,229 @@
+@inject AdminApiClient ApiClient
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (isLoading)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else if (status is not null)
+{
+    <RadzenStack Orientation="Orientation.Vertical" Gap="1rem">
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap">
+            <RadzenBadge BadgeStyle="@(status.TwoFactorEnabled ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(status.TwoFactorEnabled ? "2FA enabled" : "2FA disabled")" />
+            <RadzenBadge BadgeStyle="BadgeStyle.Light" Text="@status.PreferredTwoFactorMethod.ToString()" />
+            <RadzenBadge BadgeStyle="@(status.TwoFactorRequiredForEveryLogin ? BadgeStyle.Info : BadgeStyle.Light)" Text="@(status.TwoFactorRequiredForEveryLogin ? "Every login" : "Conditional")" />
+        </RadzenStack>
+
+        <div class="admin-form-grid">
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                <RadzenLabel Component="PreferredTwoFactorMethodInput">
+                    <RadzenIcon Icon="verified_user" class="rz-mr-1" /> Preferred method
+                </RadzenLabel>
+                <RadzenDropDown Name="PreferredTwoFactorMethodInput"
+                                @bind-Value="preferredMethod"
+                                Data="@methodOptions"
+                                Style="width: 100%;"
+                                Disabled="@isBusy" />
+            </RadzenStack>
+
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                <RadzenLabel Component="RequiredEveryLoginInput">
+                    <RadzenIcon Icon="rule" class="rz-mr-1" /> Require every login
+                </RadzenLabel>
+                <RadzenSwitch Name="RequiredEveryLoginInput" @bind-Value="requiredForEveryLogin" Disabled="@isBusy" />
+            </RadzenStack>
+        </div>
+
+        <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" Wrap="FlexWrap.Wrap">
+            <RadzenButton Text="Save 2FA preferences" Icon="save" ButtonStyle="ButtonStyle.Primary" Click="@SavePreferencesAsync" Disabled="@isBusy" IsBusy="@isBusy" />
+            <RadzenButton Text="@(status.TwoFactorEnabled ? "Disable 2FA" : "Enable 2FA")"
+                          Icon="@(status.TwoFactorEnabled ? "block" : "check_circle")"
+                          ButtonStyle="@(status.TwoFactorEnabled ? ButtonStyle.Warning : ButtonStyle.Success)"
+                          Click="@ToggleTwoFactorAsync"
+                          Disabled="@isBusy" />
+            <RadzenButton Text="Reset 2FA" Icon="restart_alt" ButtonStyle="ButtonStyle.Danger" Click="@ResetTwoFactorAsync" Disabled="@isBusy" />
+            <RadzenButton Text="Regenerate recovery codes" Icon="key" ButtonStyle="ButtonStyle.Light" Click="@RegenerateRecoveryCodesAsync" Disabled="@isBusy" />
+        </RadzenStack>
+
+        @if (recoveryCodes.Count > 0)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter">
+                <RadzenStack Orientation="Orientation.Vertical" Gap="0.35rem">
+                    @foreach (var recoveryCode in recoveryCodes)
+                    {
+                        <code>@recoveryCode</code>
+                    }
+                </RadzenStack>
+            </RadzenAlert>
+        }
+
+        <RadzenDataGrid Data="@status.Methods" TItem="UserTwoFactorMethodViewModel" AllowPaging="true" PageSize="5" AllowSorting="true" class="app-grid">
+            <Columns>
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="MethodType" Title="Method" />
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="IsEnabled" Title="Enabled">
+                    <Template Context="method">
+                        <RadzenBadge BadgeStyle="@(method.IsEnabled ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(method.IsEnabled ? "Enabled" : "Disabled")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="IsConfirmed" Title="Confirmed">
+                    <Template Context="method">
+                        <RadzenBadge BadgeStyle="@(method.IsConfirmed ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(method.IsConfirmed ? "Confirmed" : "Pending")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="IsDefault" Title="Default">
+                    <Template Context="method">
+                        <RadzenIcon Icon="@(method.IsDefault ? "star" : "star_border")" />
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="MaskedDestination" Title="Destination" />
+                <RadzenDataGridColumn TItem="UserTwoFactorMethodViewModel" Property="LastUsedUtc" Title="Last used">
+                    <Template Context="method">@FormatUtc(method.LastUsedUtc)</Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    </RadzenStack>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid UserId { get; set; }
+
+    [Parameter]
+    public EventCallback Changed { get; set; }
+
+    private readonly IReadOnlyList<TwoFactorMethodType> methodOptions =
+    [
+        TwoFactorMethodType.None,
+        TwoFactorMethodType.AuthenticatorApp,
+        TwoFactorMethodType.Email,
+        TwoFactorMethodType.Sms
+    ];
+
+    private UserTwoFactorStatusViewModel? status;
+    private TwoFactorMethodType preferredMethod;
+    private bool requiredForEveryLogin;
+    private bool isLoading;
+    private bool isBusy;
+    private string? errorMessage;
+    private string? statusMessage;
+    private IReadOnlyList<string> recoveryCodes = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            status = await ApiClient.GetUserTwoFactorStatusAsync(UserId);
+            if (status is not null)
+            {
+                preferredMethod = status.PreferredTwoFactorMethod;
+                requiredForEveryLogin = status.TwoFactorRequiredForEveryLogin;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SavePreferencesAsync()
+    {
+        await RunAsync("2FA preferences updated.", async () =>
+        {
+            await ApiClient.SetUserPreferredTwoFactorMethodAsync(UserId, preferredMethod);
+            await ApiClient.SetUserTwoFactorRequiredAsync(UserId, requiredForEveryLogin);
+            await LoadAsync();
+        });
+    }
+
+    private async Task ToggleTwoFactorAsync()
+    {
+        if (status is null)
+            return;
+
+        await RunAsync(status.TwoFactorEnabled ? "2FA disabled." : "2FA enabled.", async () =>
+        {
+            if (status.TwoFactorEnabled)
+                await ApiClient.DisableUserTwoFactorAsync(UserId);
+            else
+                await ApiClient.EnableUserTwoFactorAsync(UserId);
+
+            await LoadAsync();
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task ResetTwoFactorAsync()
+    {
+        await RunAsync("2FA reset.", async () =>
+        {
+            await ApiClient.ResetUserTwoFactorAsync(UserId);
+            recoveryCodes = [];
+            await LoadAsync();
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task RegenerateRecoveryCodesAsync()
+    {
+        await RunAsync("Recovery codes regenerated.", async () =>
+        {
+            recoveryCodes = await ApiClient.RegenerateRecoveryCodesAsync(UserId);
+            await LoadAsync();
+        });
+    }
+
+    private async Task RunAsync(string successMessage, Func<Task> action)
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await action();
+            statusMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private static string FormatUtc(DateTime? value)
+    {
+        return value is null
+            ? "-"
+            : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+}

@@ -5,8 +5,10 @@ namespace SCP.StorageFSC.Data.Repositories
     public interface ITenantFileRepository
     {
         Task<Guid> InsertAsync(TenantFile tenantFile, CancellationToken cancellationToken = default);
+        Task<bool> UpdateAsync(TenantFile tenantFile, CancellationToken cancellationToken = default);
         Task<TenantFile?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<TenantFile?> GetByFileGuidAsync(Guid fileGuid, CancellationToken cancellationToken = default);
+        Task<TenantFile?> GetByExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default);
         Task<TenantFile?> GetByTenantAndFileGuidAsync(Guid tenantId, Guid fileGuid, CancellationToken cancellationToken = default);
         Task<TenantFile?> GetByNameAsync(string name, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<TenantFile>> GetByTenantIdAsync(Guid tenantId, CancellationToken cancellationToken = default);

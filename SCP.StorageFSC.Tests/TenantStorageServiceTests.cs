@@ -17,6 +17,8 @@ public sealed class TenantStorageServiceTests
     private readonly InMemoryApiTokenRepository _tokens = new();
     private readonly InMemoryUserRepository _users = new();
     private readonly InMemoryUserRoleRepository _userRoles = new();
+    private readonly InMemoryUserTwoFactorMethodRepository _twoFactorMethods = new();
+    private readonly InMemoryUserRecoveryCodeRepository _recoveryCodes = new();
     private readonly InMemoryTenantFileRepository _tenantFiles = new();
     private readonly InMemoryStoredFileRepository _storedFiles = new();
     private readonly InMemoryDeletedTenantRepository _deletedTenants = new();
@@ -97,6 +99,97 @@ public sealed class TenantStorageServiceTests
         var token = Assert.Single(result);
         Assert.Equal("Current user key", token.Name);
         Assert.Equal(currentUserId, token.UserId);
+    }
+
+    [Fact]
+    public async Task GetTenantFilesAsync_WhenUserOwnsTenant_ReturnsActiveFiles()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var currentUserId = Guid.CreateVersion7();
+        var tenant = new Tenant
+        {
+            UserId = currentUserId,
+            Name = "Mine",
+            ExternalTenantId = Guid.CreateVersion7(),
+            IsActive = true
+        };
+        await _tenants.InsertAsync(tenant, cancellationToken);
+
+        var activeStoredFile = new StoredFile
+        {
+            Id = Guid.CreateVersion7(),
+            Sha256 = "active-hash",
+            Crc32 = "active-crc",
+            FileSize = 2048,
+            PhysicalPath = "active.bin",
+            OriginalFileName = "active.bin",
+            ContentType = "application/octet-stream",
+            ReferenceCount = 1,
+            CreatedUtc = DateTime.UtcNow
+        };
+        var deletedStoredFile = new StoredFile
+        {
+            Id = Guid.CreateVersion7(),
+            Sha256 = "deleted-hash",
+            Crc32 = "deleted-crc",
+            FileSize = 4096,
+            PhysicalPath = "deleted.bin",
+            OriginalFileName = "deleted.bin",
+            IsDeleted = true,
+            ReferenceCount = 1,
+            CreatedUtc = DateTime.UtcNow
+        };
+        await _storedFiles.InsertAsync(activeStoredFile, cancellationToken);
+        await _storedFiles.InsertAsync(deletedStoredFile, cancellationToken);
+
+        await _tenantFiles.InsertAsync(new TenantFile
+        {
+            TenantId = tenant.Id,
+            StoredFileId = activeStoredFile.Id,
+            FileGuid = Guid.CreateVersion7(),
+            FileName = "active.bin",
+            IsActive = true,
+            CreatedUtc = DateTime.UtcNow
+        }, cancellationToken);
+        await _tenantFiles.InsertAsync(new TenantFile
+        {
+            TenantId = tenant.Id,
+            StoredFileId = deletedStoredFile.Id,
+            FileGuid = Guid.CreateVersion7(),
+            FileName = "deleted.bin",
+            IsActive = true,
+            CreatedUtc = DateTime.UtcNow
+        }, cancellationToken);
+
+        SetCurrentUser(currentUserId, isAdmin: false);
+        var sut = CreateService();
+
+        var result = await sut.GetTenantFilesAsync(tenant.Id, cancellationToken);
+
+        var file = Assert.Single(result);
+        Assert.Equal("active.bin", file.FileName);
+        Assert.Equal(2048, file.FileSize);
+        Assert.Equal("active-hash", file.Sha256);
+    }
+
+    [Fact]
+    public async Task GetTenantFilesAsync_WhenUserDoesNotOwnTenant_ThrowsUnauthorizedAccessException()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var tenant = new Tenant
+        {
+            UserId = Guid.CreateVersion7(),
+            Name = "Other",
+            ExternalTenantId = Guid.CreateVersion7(),
+            IsActive = true
+        };
+        await _tenants.InsertAsync(tenant, cancellationToken);
+
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: false);
+        var sut = CreateService();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            sut.GetTenantFilesAsync(tenant.Id, cancellationToken));
     }
 
     [Fact]
@@ -214,6 +307,81 @@ public sealed class TenantStorageServiceTests
 
         Assert.Equal(owner.Id, result.UserId);
         Assert.Equal(owner.Id, (await _tenants.GetByIdAsync(result.Id, cancellationToken))!.UserId);
+    }
+
+    [Fact]
+    public async Task CreateTenantApiTokenAsync_UsesTenantOwner()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var owner = new User
+        {
+            Id = Guid.CreateVersion7(),
+            Name = "Owner",
+            NormalizedName = "OWNER",
+            PasswordHash = "hash"
+        };
+        await _users.InsertAsync(owner, cancellationToken);
+        var tenant = new Tenant
+        {
+            UserId = owner.Id,
+            Name = "Tenant A",
+            ExternalTenantId = Guid.CreateVersion7(),
+            IsActive = true
+        };
+        await _tenants.InsertAsync(tenant, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateService();
+
+        var result = await sut.CreateTenantApiTokenAsync(tenant.Id, new CreateTenantApiTokenRequest
+        {
+            Name = "Tenant key",
+            CanRead = true,
+            CanWrite = true
+        }, cancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(owner.Id, result.Token.UserId);
+        Assert.Equal(tenant.Id, result.Token.TenantId);
+        Assert.NotEmpty(result.PlainTextToken);
+    }
+
+    [Fact]
+    public async Task DeleteTenantApiTokenAsync_WhenTokenBelongsToAnotherTenant_ReturnsFalse()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var tenant = new Tenant
+        {
+            UserId = Guid.CreateVersion7(),
+            Name = "Tenant A",
+            ExternalTenantId = Guid.CreateVersion7(),
+            IsActive = true
+        };
+        var otherTenant = new Tenant
+        {
+            UserId = tenant.UserId,
+            Name = "Tenant B",
+            ExternalTenantId = Guid.CreateVersion7(),
+            IsActive = true
+        };
+        await _tenants.InsertAsync(tenant, cancellationToken);
+        await _tenants.InsertAsync(otherTenant, cancellationToken);
+        var token = new ApiToken
+        {
+            UserId = tenant.UserId,
+            TenantId = otherTenant.Id,
+            Name = "Other key",
+            TokenHash = "hash",
+            TokenPrefix = "prefix",
+            IsActive = true
+        };
+        await _tokens.InsertAsync(token, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateService();
+
+        var deleted = await sut.DeleteTenantApiTokenAsync(tenant.Id, token.Id, cancellationToken);
+
+        Assert.False(deleted);
+        Assert.NotNull(await _tokens.GetByIdAsync(token.Id, cancellationToken));
     }
 
     [Fact]
@@ -340,6 +508,112 @@ public sealed class TenantStorageServiceTests
             }, cancellationToken));
     }
 
+    [Fact]
+    public async Task CreateUserAsync_UsesTemporaryPasswordAndRequestedFlags()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateService();
+
+        var result = await sut.CreateUserAsync(new CreateUserRequest
+        {
+            Name = "Alice",
+            Email = "alice@example.com",
+            PhoneNumber = "+123456789",
+            TemporaryPassword = "TemporaryPassword123!",
+            IsActive = false,
+            MustChangePassword = true
+        }, cancellationToken);
+
+        var user = await _users.GetByIdAsync(result.UserId, cancellationToken);
+        Assert.NotNull(user);
+        Assert.Equal("hash::TemporaryPassword123!", user.PasswordHash);
+        Assert.Equal("+123456789", user.PhoneNumber);
+        Assert.False(user.IsActive);
+        Assert.True(user.MustChangePassword);
+        Assert.NotNull(user.PasswordChangedUtc);
+    }
+
+    [Fact]
+    public async Task UpdateUserProfileAsync_DoesNotChangeSecurityStateOrAuditFields()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var user = new User
+        {
+            Name = "Bob",
+            NormalizedName = "BOB",
+            Email = "bob@example.com",
+            NormalizedEmail = "BOB@EXAMPLE.COM",
+            PhoneNumber = "+111",
+            PhoneNumberConfirmed = true,
+            FailedLoginCount = 3,
+            LastFailedLoginUtc = DateTime.UtcNow.AddDays(-2),
+            LastLoginUtc = DateTime.UtcNow.AddDays(-1),
+            LastLoginIpAddress = "192.0.2.10",
+            TwoFactorEnabled = true,
+            TwoFactorLastUsedUtc = DateTime.UtcNow.AddHours(-3),
+            PasswordChangedUtc = DateTime.UtcNow.AddDays(-7),
+            PasswordExpiresUtc = DateTime.UtcNow.AddDays(7),
+            SecurityStamp = "original-stamp"
+        };
+        await _users.InsertAsync(user, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateService();
+
+        var result = await sut.UpdateUserProfileAsync(user.Id, new UpdateUserProfileRequest
+        {
+            Name = "Bob Updated",
+            Email = "bob@example.com",
+            PhoneNumber = "+222",
+            ExternalUserId = "external-1",
+            Comment = "note"
+        }, cancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, user.FailedLoginCount);
+        Assert.NotNull(user.LastFailedLoginUtc);
+        Assert.NotNull(user.LastLoginUtc);
+        Assert.True(user.TwoFactorEnabled);
+        Assert.NotNull(user.TwoFactorLastUsedUtc);
+        Assert.NotNull(user.PasswordChangedUtc);
+        Assert.NotNull(user.PasswordExpiresUtc);
+        Assert.Equal("original-stamp", user.SecurityStamp);
+        Assert.Equal("external-1", user.ExternalUserId);
+        Assert.Equal("note", user.Comment);
+    }
+
+    [Fact]
+    public async Task ResetUserPasswordAsync_UpdatesPasswordSecurityState()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var user = new User
+        {
+            Name = "Carol",
+            NormalizedName = "CAROL",
+            PasswordHash = "old-hash",
+            SecurityStamp = "old-stamp",
+            FailedLoginCount = 5,
+            LastFailedLoginUtc = DateTime.UtcNow.AddMinutes(-5)
+        };
+        await _users.InsertAsync(user, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateService();
+
+        var changed = await sut.ResetUserPasswordAsync(user.Id, new ResetUserPasswordRequest
+        {
+            NewPassword = "TemporaryPassword123!",
+            MustChangePassword = true
+        }, cancellationToken);
+
+        Assert.True(changed);
+        Assert.Equal("hash::TemporaryPassword123!", user.PasswordHash);
+        Assert.NotEqual("old-stamp", user.SecurityStamp);
+        Assert.Equal(0, user.FailedLoginCount);
+        Assert.Null(user.LastFailedLoginUtc);
+        Assert.True(user.MustChangePassword);
+        Assert.NotNull(user.PasswordChangedUtc);
+    }
+
     private TenantStorageService CreateService()
     {
         return new TenantStorageService(
@@ -351,6 +625,9 @@ public sealed class TenantStorageServiceTests
             _storedFiles,
             _deletedTenants,
             new TestPasswordHashService(),
+            _twoFactorMethods,
+            _recoveryCodes,
+            new TestAuthenticationHashService(),
             _httpContextAccessor,
             NullLogger<TenantStorageService>.Instance);
     }
@@ -601,11 +878,24 @@ public sealed class TenantStorageServiceTests
             return Task.FromResult(tenantFile.Id);
         }
 
+        public Task<bool> UpdateAsync(TenantFile tenantFile, CancellationToken cancellationToken = default)
+        {
+            var index = _items.FindIndex(x => x.Id == tenantFile.Id);
+            if (index < 0)
+                return Task.FromResult(false);
+
+            _items[index] = tenantFile;
+            return Task.FromResult(true);
+        }
+
         public Task<TenantFile?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
             => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
 
         public Task<TenantFile?> GetByFileGuidAsync(Guid fileGuid, CancellationToken cancellationToken = default)
             => Task.FromResult(_items.FirstOrDefault(x => x.FileGuid == fileGuid));
+
+        public Task<TenantFile?> GetByExternalKeyAsync(Guid tenantId, string externalKey, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.TenantId == tenantId && x.ExternalKey == externalKey && x.IsActive));
 
         public Task<TenantFile?> GetByTenantAndFileGuidAsync(Guid tenantId, Guid fileGuid, CancellationToken cancellationToken = default)
             => Task.FromResult(_items.FirstOrDefault(x => x.TenantId == tenantId && x.FileGuid == fileGuid));
@@ -703,5 +993,79 @@ public sealed class TenantStorageServiceTests
     {
         public string HashPassword(User user, string password) => $"hash::{password}";
         public bool VerifyPassword(User user, string password) => user.PasswordHash == $"hash::{password}";
+    }
+
+    private sealed class TestAuthenticationHashService : IAuthenticationHashService
+    {
+        public string HashSecret(string value) => $"hash::{value}";
+    }
+
+    private sealed class InMemoryUserTwoFactorMethodRepository : IUserTwoFactorMethodRepository
+    {
+        private readonly List<UserTwoFactorMethod> _items = [];
+
+        public Task<bool> InsertAsync(UserTwoFactorMethod method, CancellationToken cancellationToken = default)
+        {
+            _items.Add(method);
+            return Task.FromResult(true);
+        }
+
+        public Task<UserTwoFactorMethod?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
+        public Task<IReadOnlyList<UserTwoFactorMethod>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<UserTwoFactorMethod>>(_items.Where(x => x.UserId == userId).ToList());
+
+        public Task<UserTwoFactorMethod?> GetDefaultAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.UserId == userId && x.IsDefault));
+
+        public Task<UserTwoFactorMethod?> GetByUserAndTypeAsync(Guid userId, TwoFactorMethodType methodType, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.UserId == userId && x.MethodType == methodType));
+
+        public Task<bool> UpdateAsync(UserTwoFactorMethod method, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Any(x => x.Id == method.Id));
+
+        public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.RemoveAll(x => x.Id == id) > 0);
+    }
+
+    private sealed class InMemoryUserRecoveryCodeRepository : IUserRecoveryCodeRepository
+    {
+        private readonly List<UserRecoveryCode> _items = [];
+
+        public Task<bool> InsertAsync(UserRecoveryCode code, CancellationToken cancellationToken = default)
+        {
+            _items.Add(code);
+            return Task.FromResult(true);
+        }
+
+        public Task<int> InsertManyAsync(IEnumerable<UserRecoveryCode> codes, CancellationToken cancellationToken = default)
+        {
+            var list = codes.ToList();
+            _items.AddRange(list);
+            return Task.FromResult(list.Count);
+        }
+
+        public Task<IReadOnlyList<UserRecoveryCode>> GetUnusedByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<UserRecoveryCode>>(_items.Where(x => x.UserId == userId && !x.IsUsed).ToList());
+
+        public Task<UserRecoveryCode?> GetUnusedByHashAsync(Guid userId, string codeHash, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.UserId == userId && x.CodeHash == codeHash && !x.IsUsed));
+
+        public Task<bool> MarkUsedAsync(Guid id, DateTime usedUtc, string? ipAddress, string? userAgent, CancellationToken cancellationToken = default)
+        {
+            var code = _items.FirstOrDefault(x => x.Id == id);
+            if (code is null)
+                return Task.FromResult(false);
+
+            code.IsUsed = true;
+            code.UsedUtc = usedUtc;
+            code.UsedIpAddress = ipAddress;
+            code.MarkUpdated();
+            return Task.FromResult(true);
+        }
+
+        public Task<int> DeleteByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.RemoveAll(x => x.UserId == userId));
     }
 }
