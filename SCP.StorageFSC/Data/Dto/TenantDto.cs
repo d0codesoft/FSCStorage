@@ -84,6 +84,7 @@ namespace SCP.StorageFSC.Data.Dto
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public bool EmailConfirmed { get; set; }
         public string? PhoneNumber { get; set; }
         public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }
@@ -152,6 +153,11 @@ namespace SCP.StorageFSC.Data.Dto
     public sealed class ChangeUserEmailRequest
     {
         public string Email { get; set; } = string.Empty;
+    }
+
+    public sealed class ConfirmUserEmailRequest
+    {
+        public string Code { get; set; } = string.Empty;
     }
 
     public sealed class ChangeUserPhoneRequest
@@ -252,6 +258,7 @@ namespace SCP.StorageFSC.Data.Dto
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public bool EmailConfirmed { get; set; }
         public string? PhoneNumber { get; set; }
         public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }

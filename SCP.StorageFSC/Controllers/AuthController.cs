@@ -5,6 +5,7 @@ using scp.filestorage.Data.Models;
 using scp.filestorage.Security;
 using scp.filestorage.Services.Auth;
 using SCP.StorageFSC.Data.Dto;
+using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Security;
 using System.Security.Claims;
 using FscAuthenticationService = scp.filestorage.Services.Auth.IAuthenticationService;
@@ -16,10 +17,14 @@ namespace SCP.StorageFSC.Controllers
     public sealed class AuthController : ControllerBase
     {
         private readonly FscAuthenticationService _authenticationService;
+        private readonly IUserAuthenticationAuditService _userAuthenticationAuditService;
 
-        public AuthController(FscAuthenticationService authenticationService)
+        public AuthController(
+            FscAuthenticationService authenticationService,
+            IUserAuthenticationAuditService userAuthenticationAuditService)
         {
             _authenticationService = authenticationService;
+            _userAuthenticationAuditService = userAuthenticationAuditService;
         }
 
         [HttpPost("login")]
@@ -43,6 +48,12 @@ namespace SCP.StorageFSC.Controllers
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
                     UserAgent = Request.Headers.UserAgent.FirstOrDefault()
                 },
+                cancellationToken);
+
+            await _userAuthenticationAuditService.LogPasswordLoginAsync(
+                HttpContext,
+                request.Login,
+                result,
                 cancellationToken);
 
             if (result.RequiresTwoFactor)
@@ -81,6 +92,12 @@ namespace SCP.StorageFSC.Controllers
                 },
                 cancellationToken);
 
+            await _userAuthenticationAuditService.LogTwoFactorAsync(
+                HttpContext,
+                result,
+                "TwoFactor",
+                cancellationToken);
+
             return await CompleteTwoFactorSignInAsync(result, request.Remember);
         }
 
@@ -98,6 +115,12 @@ namespace SCP.StorageFSC.Controllers
                     IpAddress = HttpContext.Connection.RemoteIpAddress?.ToString(),
                     UserAgent = Request.Headers.UserAgent.FirstOrDefault()
                 },
+                cancellationToken);
+
+            await _userAuthenticationAuditService.LogTwoFactorAsync(
+                HttpContext,
+                result,
+                "RecoveryCode",
                 cancellationToken);
 
             return await CompleteTwoFactorSignInAsync(result, request.Remember);

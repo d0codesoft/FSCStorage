@@ -1,0 +1,81 @@
+<RadzenTemplateForm TItem="TenantEditorModel" Data="@Model" Submit="@SubmitAsync">
+    <DataAnnotationsValidator />
+
+    <div class="admin-form-grid">
+        @if (ShowOwner)
+        {
+            <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                <RadzenLabel Component="TenantOwnerInput">
+                    <RadzenIcon Icon="person" class="rz-mr-1" /> Owner user
+                </RadzenLabel>
+                <RadzenDropDown Name="TenantOwnerInput"
+                                @bind-Value="Model.UserId"
+                                Data="@Users"
+                                TextProperty="UserName"
+                                ValueProperty="UserId"
+                                Disabled="@IsBusy"
+                                Style="width: 100%;" />
+                <ValidationMessage For="@(() => Model.UserId)" />
+            </RadzenStack>
+        }
+
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+            <RadzenLabel Component="TenantNameInput">
+                <RadzenIcon Icon="apartment" class="rz-mr-1" /> Name
+            </RadzenLabel>
+            <RadzenTextBox Name="TenantNameInput" @bind-Value="Model.Name" Disabled="@IsBusy" Style="width: 100%;" />
+            <ValidationMessage For="@(() => Model.Name)" />
+        </RadzenStack>
+
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+            <RadzenLabel Component="TenantActiveInput">
+                <RadzenIcon Icon="toggle_on" class="rz-mr-1" /> State
+            </RadzenLabel>
+            <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem" class="tenant-active-row">
+                <RadzenSwitch Name="TenantActiveInput" @bind-Value="Model.IsActive" Disabled="@IsBusy" />
+                <RadzenBadge BadgeStyle="@(Model.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(Model.IsActive ? "Active" : "Disabled")" />
+            </RadzenStack>
+        </RadzenStack>
+    </div>
+
+    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.End" Gap="0.75rem" Wrap="FlexWrap.Wrap">
+        @if (Cancel.HasDelegate)
+        {
+            <RadzenButton Text="Cancel" Icon="close" ButtonStyle="ButtonStyle.Light" Click="@CancelAsync" Disabled="@IsBusy" />
+        }
+        <RadzenButton Text="@SubmitText" Icon="save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Disabled="@IsBusy" IsBusy="@IsBusy" />
+    </RadzenStack>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public TenantEditorModel Model { get; set; } = new();
+
+    [Parameter]
+    public IReadOnlyList<UserManagementViewModel> Users { get; set; } = [];
+
+    [Parameter]
+    public bool ShowOwner { get; set; }
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public string SubmitText { get; set; } = "Save tenant";
+
+    [Parameter]
+    public EventCallback Submit { get; set; }
+
+    [Parameter]
+    public EventCallback Cancel { get; set; }
+
+    private Task SubmitAsync()
+    {
+        return Submit.InvokeAsync();
+    }
+
+    private Task CancelAsync()
+    {
+        return Cancel.InvokeAsync();
+    }
+}

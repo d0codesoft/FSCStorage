@@ -1,4 +1,5 @@
 @inject AdminApiClient ApiClient
+@inject NavigationManager Navigation
 
 @if (!string.IsNullOrWhiteSpace(statusMessage))
 {
@@ -27,6 +28,55 @@ else if (status is not null)
             <RadzenBadge BadgeStyle="@(status.TwoFactorRequiredForEveryLogin ? BadgeStyle.Info : BadgeStyle.Light)" Text="@(status.TwoFactorRequiredForEveryLogin ? "Every login" : "Conditional")" />
         </RadzenStack>
 
+        <RadzenStack Orientation="Orientation.Vertical" Gap="0.75rem">
+            <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End" Wrap="FlexWrap.Wrap">
+                <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                    <RadzenLabel Component="AuthenticatorCodeInput">
+                        <RadzenIcon Icon="password" class="rz-mr-1" /> Authenticator code
+                    </RadzenLabel>
+                    <RadzenTextBox Name="AuthenticatorCodeInput"
+                                   @bind-Value="authenticatorCode"
+                                   Disabled="@isBusy"
+                                   MaxLength="12"
+                                   Style="width: 14rem;" />
+                </RadzenStack>
+                <RadzenButton Text="Add authenticator method"
+                              Icon="add"
+                              ButtonStyle="ButtonStyle.Light"
+                              Click="@BeginAuthenticatorSetupAsync"
+                              Disabled="@isBusy" />
+                <RadzenButton Text="Confirm authenticator"
+                              Icon="verified"
+                              ButtonStyle="ButtonStyle.Primary"
+                              Click="@ConfirmAuthenticatorAsync"
+                              Disabled="@(isBusy || string.IsNullOrWhiteSpace(authenticatorCode))" />
+                <RadzenButton Text="Add email method"
+                              Icon="alternate_email"
+                              ButtonStyle="ButtonStyle.Light"
+                              Click="@AddEmailMethodAsync"
+                              Disabled="@isBusy" />
+                <RadzenButton Text="Verify email"
+                              Icon="mark_email_read"
+                              ButtonStyle="ButtonStyle.Info"
+                              Click="@OpenEmailVerification"
+                              Disabled="@isBusy" />
+            </RadzenStack>
+
+            @if (authenticatorSetup is not null)
+            {
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="1rem" AlignItems="AlignItems.Center" Wrap="FlexWrap.Wrap">
+                    @if (!string.IsNullOrWhiteSpace(authenticatorSetup.QrCodePngBase64))
+                    {
+                        <img src="@($"data:image/png;base64,{authenticatorSetup.QrCodePngBase64}")" alt="Authenticator QR code" style="width: 144px; height: 144px;" />
+                    }
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0.35rem">
+                        <RadzenLabel Text="Secret" />
+                        <code>@authenticatorSetup.Secret</code>
+                    </RadzenStack>
+                </RadzenStack>
+            }
+        </RadzenStack>
+
         <div class="admin-form-grid">
             <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
                 <RadzenLabel Component="PreferredTwoFactorMethodInput">
@@ -53,7 +103,7 @@ else if (status is not null)
                           Icon="@(status.TwoFactorEnabled ? "block" : "check_circle")"
                           ButtonStyle="@(status.TwoFactorEnabled ? ButtonStyle.Warning : ButtonStyle.Success)"
                           Click="@ToggleTwoFactorAsync"
-                          Disabled="@isBusy" />
+                          Disabled="@(isBusy || (!status.TwoFactorEnabled && !HasActiveConfirmedMethod))" />
             <RadzenButton Text="Reset 2FA" Icon="restart_alt" ButtonStyle="ButtonStyle.Danger" Click="@ResetTwoFactorAsync" Disabled="@isBusy" />
             <RadzenButton Text="Regenerate recovery codes" Icon="key" ButtonStyle="ButtonStyle.Light" Click="@RegenerateRecoveryCodesAsync" Disabled="@isBusy" />
         </RadzenStack>
@@ -119,7 +169,12 @@ else if (status is not null)
     private bool isBusy;
     private string? errorMessage;
     private string? statusMessage;
+    private string authenticatorCode = string.Empty;
+    private AuthenticatorSetupViewModel? authenticatorSetup;
     private IReadOnlyList<string> recoveryCodes = [];
+
+    private bool HasActiveConfirmedMethod =>
+        status?.Methods.Any(method => method.IsEnabled && method.IsConfirmed) == true;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -148,6 +203,47 @@ else if (status is not null)
         {
             isLoading = false;
         }
+    }
+
+    private async Task BeginAuthenticatorSetupAsync()
+    {
+        await RunAsync("Authenticator method created.", async () =>
+        {
+            var result = await ApiClient.SetupUserAuthenticatorAsync(UserId);
+            if (result.Status != TwoFactorSetupStatus.Success)
+                throw new InvalidOperationException(GetSetupStatusMessage(result.Status));
+
+            authenticatorSetup = result;
+            authenticatorCode = string.Empty;
+            await LoadAsync();
+        });
+    }
+
+    private async Task ConfirmAuthenticatorAsync()
+    {
+        await RunAsync("Authenticator method confirmed.", async () =>
+        {
+            await ApiClient.ConfirmUserAuthenticatorAsync(UserId, authenticatorCode.Trim());
+            authenticatorSetup = null;
+            authenticatorCode = string.Empty;
+            await LoadAsync();
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private async Task AddEmailMethodAsync()
+    {
+        await RunAsync("Email method updated.", async () =>
+        {
+            await ApiClient.SendUserEmailConfirmationAsync(UserId);
+            await LoadAsync();
+            await Changed.InvokeAsync();
+        });
+    }
+
+    private void OpenEmailVerification()
+    {
+        Navigation.NavigateTo($"/users/{UserId}/email-verification");
     }
 
     private async Task SavePreferencesAsync()
@@ -183,6 +279,8 @@ else if (status is not null)
         {
             await ApiClient.ResetUserTwoFactorAsync(UserId);
             recoveryCodes = [];
+            authenticatorSetup = null;
+            authenticatorCode = string.Empty;
             await LoadAsync();
             await Changed.InvokeAsync();
         });
@@ -225,5 +323,17 @@ else if (status is not null)
             : DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
                 .ToLocalTime()
                 .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static string GetSetupStatusMessage(TwoFactorSetupStatus status)
+    {
+        return status switch
+        {
+            TwoFactorSetupStatus.UserNotFound => "User was not found.",
+            TwoFactorSetupStatus.UserInactive => "User is inactive.",
+            TwoFactorSetupStatus.MethodAlreadyExists => "Authenticator method already exists.",
+            TwoFactorSetupStatus.InvalidCode => "Authenticator code is invalid.",
+            _ => $"Authenticator setup failed: {status}."
+        };
     }
 }

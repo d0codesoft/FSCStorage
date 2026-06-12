@@ -1,0 +1,159 @@
+@page "/users/{UserId:guid}/email-verification"
+@attribute [Authorize(Roles = "Admin")]
+@inject AdminApiClient ApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Email verification</PageTitle>
+
+<div class="page-heading">
+    <div>
+        <h1>Email verification</h1>
+        <p>@(user?.UserName ?? "User")</p>
+    </div>
+    <div class="button-row">
+        <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToUser" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
+        <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(statusMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @statusMessage
+    </RadzenAlert>
+}
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <RadzenAlert AlertStyle="AlertStyle.Danger" Variant="Variant.Flat" Shade="Shade.Lighter">
+        @errorMessage
+    </RadzenAlert>
+}
+
+@if (isLoading)
+{
+    <RadzenProgressBar Mode="ProgressBarMode.Indeterminate" />
+}
+else if (user is null)
+{
+    <RadzenCard class="empty-panel">
+        <RadzenIcon Icon="person_off" />
+        <span>User was not found.</span>
+    </RadzenCard>
+}
+else
+{
+    <RadzenCard class="details-panel">
+        <div class="details-header">
+            <h2>@(string.IsNullOrWhiteSpace(user.Email) ? "No email configured" : user.Email)</h2>
+            <RadzenBadge BadgeStyle="@(user.EmailConfirmed ? BadgeStyle.Success : BadgeStyle.Warning)" Text="@(user.EmailConfirmed ? "Verified" : "Unverified")" />
+        </div>
+
+        @if (string.IsNullOrWhiteSpace(user.Email))
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Warning" Variant="Variant.Flat" Shade="Shade.Lighter">
+                Add an email address before starting verification.
+            </RadzenAlert>
+        }
+        else if (user.EmailConfirmed)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Success" Variant="Variant.Flat" Shade="Shade.Lighter">
+                This email is verified and can be used as a 2FA method.
+            </RadzenAlert>
+        }
+        else
+        {
+            <RadzenStack Orientation="Orientation.Vertical" Gap="1rem">
+                <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem" AlignItems="AlignItems.End" Wrap="FlexWrap.Wrap">
+                    <RadzenButton Text="Send verification email" Icon="outgoing_mail" ButtonStyle="ButtonStyle.Primary" Click="@SendAsync" Disabled="@isBusy" IsBusy="@isBusy" />
+
+                    <RadzenStack Orientation="Orientation.Vertical" Gap="0.5rem">
+                        <RadzenLabel Component="EmailCodeInput">
+                            <RadzenIcon Icon="password" class="rz-mr-1" /> Verification code
+                        </RadzenLabel>
+                        <RadzenTextBox Name="EmailCodeInput" @bind-Value="code" Disabled="@isBusy" MaxLength="12" Style="width: 14rem;" />
+                    </RadzenStack>
+
+                    <RadzenButton Text="Confirm email" Icon="mark_email_read" ButtonStyle="ButtonStyle.Success" Click="@ConfirmAsync" Disabled="@(isBusy || string.IsNullOrWhiteSpace(code))" />
+                </RadzenStack>
+            </RadzenStack>
+        }
+    </RadzenCard>
+}
+
+@code {
+    [Parameter]
+    public Guid UserId { get; set; }
+
+    private UserManagementViewModel? user;
+    private bool isLoading;
+    private bool isBusy;
+    private string? errorMessage;
+    private string? statusMessage;
+    private string code = string.Empty;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            user = await ApiClient.GetUserAsync(UserId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SendAsync()
+    {
+        await RunAsync("Verification email sent.", async () =>
+        {
+            await ApiClient.SendUserEmailConfirmationAsync(UserId);
+        });
+    }
+
+    private async Task ConfirmAsync()
+    {
+        await RunAsync("Email verified.", async () =>
+        {
+            await ApiClient.ConfirmUserEmailAsync(UserId, code.Trim());
+            code = string.Empty;
+            await LoadAsync();
+        });
+    }
+
+    private async Task RunAsync(string successMessage, Func<Task> action)
+    {
+        isBusy = true;
+        errorMessage = null;
+        statusMessage = null;
+
+        try
+        {
+            await action();
+            statusMessage = successMessage;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void BackToUser()
+    {
+        Navigation.NavigateTo($"/users/{UserId}");
+    }
+}

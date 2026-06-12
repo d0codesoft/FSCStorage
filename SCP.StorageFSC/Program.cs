@@ -99,14 +99,17 @@ builder.Services.AddSingleton<IDbInitializer, DbInitializer>();
 
 builder.Services.AddScoped<IApiTokenService, ApiTokenService>();
 builder.Services.AddScoped<IApiAuthenticationAuditService, ApiAuthenticationAuditService>();
+builder.Services.AddScoped<IUserAuthenticationAuditService, UserAuthenticationAuditService>();
 builder.Services.AddScoped<ITenantAuthorizationService, TenantAuthorizationService>();
 
 builder.Services.AddScoped<ITenantRepository, TenantRepository>();
 builder.Services.AddScoped<IApiTokenRepository, ApiTokenRepository>();
 builder.Services.AddScoped<IApiTokenConnectionLogRepository, ApiTokenConnectionLogRepository>();
+builder.Services.AddScoped<IUserAuthenticationAuditLogRepository, UserAuthenticationAuditLogRepository>();
 builder.Services.AddScoped<IStoredFileRepository, StoredFileRepository>();
 builder.Services.AddScoped<ITenantFileRepository, TenantFileRepository>();
 builder.Services.AddScoped<ITenantStorageService, TenantStorageService>();
+builder.Services.AddScoped<IUserStorageService, UserStorageService>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IMultipartUploadSessionRepository, MultipartUploadSessionRepository>();
 builder.Services.AddScoped<IMultipartUploadPartRepository, MultipartUploadPartRepository>();

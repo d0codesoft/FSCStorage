@@ -23,6 +23,7 @@ namespace scp.filestorage.Services.Auth
         private readonly IAuthenticationSecretProtector _secretProtector;
         private readonly ITotpService _totpService;
         private readonly IOneTimeCodeSender _oneTimeCodeSender;
+        private readonly IQrCodeService _qrCodeService;
 
         public AuthenticationService(
             IUserRepository userRepository,
@@ -35,7 +36,8 @@ namespace scp.filestorage.Services.Auth
             IAuthenticationHashService hashService,
             IAuthenticationSecretProtector secretProtector,
             ITotpService totpService,
-            IOneTimeCodeSender oneTimeCodeSender)
+            IOneTimeCodeSender oneTimeCodeSender,
+            IQrCodeService qrCodeService)
         {
             _userRepository = userRepository;
             _twoFactorMethodRepository = twoFactorMethodRepository;
@@ -48,6 +50,7 @@ namespace scp.filestorage.Services.Auth
             _secretProtector = secretProtector;
             _totpService = totpService;
             _oneTimeCodeSender = oneTimeCodeSender;
+            _qrCodeService = qrCodeService;
         }
 
         public async Task<LoginResult> LoginAsync(
@@ -558,7 +561,8 @@ namespace scp.filestorage.Services.Auth
             {
                 Status = TwoFactorSetupStatus.Success,
                 Secret = secret,
-                OtpAuthUri = otpAuthUri
+                OtpAuthUri = otpAuthUri,
+                QrCodePngBase64 = _qrCodeService.GeneratePngBase64(otpAuthUri)
             };
         }
 

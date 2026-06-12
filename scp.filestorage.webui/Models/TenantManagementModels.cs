@@ -10,6 +10,15 @@ namespace scp.filestorage.webui.Models
         Sms = 3
     }
 
+    public enum TwoFactorSetupStatus
+    {
+        Success = 0,
+        UserNotFound = 1,
+        UserInactive = 2,
+        MethodAlreadyExists = 3,
+        InvalidCode = 4
+    }
+
     public sealed class TenantViewModel
     {
         public Guid Id { get; set; }
@@ -156,6 +165,7 @@ namespace scp.filestorage.webui.Models
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public bool EmailConfirmed { get; set; }
         public string? PhoneNumber { get; set; }
         public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }
@@ -220,6 +230,7 @@ namespace scp.filestorage.webui.Models
         public Guid UserId { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string? Email { get; set; }
+        public bool EmailConfirmed { get; set; }
         public string? PhoneNumber { get; set; }
         public bool PhoneNumberConfirmed { get; set; }
         public bool IsActive { get; set; }
@@ -337,6 +348,24 @@ namespace scp.filestorage.webui.Models
         public string? MaskedDestination { get; set; }
         public DateTime? ConfirmedUtc { get; set; }
         public DateTime? LastUsedUtc { get; set; }
+    }
+
+    public sealed class AuthenticatorSetupViewModel
+    {
+        public TwoFactorSetupStatus Status { get; set; }
+        public string? Secret { get; set; }
+        public string? OtpAuthUri { get; set; }
+        public string QrCodePngBase64 { get; set; } = string.Empty;
+    }
+
+    public sealed class ConfirmAuthenticatorRequestModel
+    {
+        public string Code { get; set; } = string.Empty;
+    }
+
+    public sealed class ConfirmUserEmailRequestModel
+    {
+        public string Code { get; set; } = string.Empty;
     }
 
     public sealed class UserLoginHistoryViewModel

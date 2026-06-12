@@ -16,6 +16,10 @@
     <div class="button-row">
         <RadzenButton Text="Back" Icon="arrow_back" Click="@BackToUsers" Disabled="@isBusy" ButtonStyle="ButtonStyle.Light" />
         <RadzenButton Text="Refresh" Icon="refresh" Click="@LoadAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Primary" />
+        @if (user is not null && !string.IsNullOrWhiteSpace(user.Email) && !user.EmailConfirmed)
+        {
+            <RadzenButton Text="Verify email" Icon="mark_email_read" Click="@OpenEmailVerification" Disabled="@isBusy" ButtonStyle="ButtonStyle.Info" />
+        }
         @if (user is not null && currentUser?.UserId == user.UserId)
         {
             <RadzenButton Text="Change password" Icon="lock" Click="@ChangePasswordAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Info" />
@@ -47,21 +51,7 @@ else if (notFound)
 }
 else if (user is not null)
 {
-    <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Center" Gap="0.5rem" class="rz-pt-2 rz-pb-4">
-        <RadzenSelectBar @bind-Value="@tabPosition"
-                         TextProperty="Text"
-                         ValueProperty="Value"
-                         Data="@tabPositionOptions"
-                         Size="ButtonSize.Small"
-                         class="rz-display-none rz-display-xl-flex" />
-        <RadzenDropDown @bind-Value="@tabPosition"
-                        TextProperty="Text"
-                        ValueProperty="Value"
-                        Data="@tabPositionOptions"
-                        class="rz-display-flex rz-display-xl-none" />
-    </RadzenStack>
-
-    <RadzenTabs Change="@OnTabChanged" TabPosition="@tabPosition" RenderMode="TabRenderMode.Client" class="user-detail-tabs">
+    <RadzenTabs Change="@OnTabChanged" TabPosition=TabPosition.Top RenderMode="TabRenderMode.Client" class="user-detail-tabs">
         <Tabs>
             <RadzenTabsItem Text="General">
                 <RadzenCard class="details-panel">
@@ -71,6 +61,10 @@ else if (user is not null)
                             <RadzenBadge BadgeStyle="@(user.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(user.IsActive ? "Active" : "Inactive")" />
                             <RadzenBadge BadgeStyle="@(user.IsLocked ? BadgeStyle.Warning : BadgeStyle.Light)" Text="@(user.IsLocked ? "Locked" : "Unlocked")" />
                             <RadzenBadge BadgeStyle="@(user.IsAdmin ? BadgeStyle.Info : BadgeStyle.Light)" Text="@(user.IsAdmin ? "Admin" : "User")" />
+                            @if (!string.IsNullOrWhiteSpace(user.Email))
+                            {
+                                <RadzenBadge BadgeStyle="@(user.EmailConfirmed ? BadgeStyle.Success : BadgeStyle.Warning)" Text="@(user.EmailConfirmed ? "Email verified" : "Email unverified")" />
+                            }
                         </RadzenStack>
                     </div>
                     <UserGeneralForm User="@user"
@@ -105,14 +99,7 @@ else if (user is not null)
     private bool isBusy;
     private bool notFound;
     private string? errorMessage;
-    private TabPosition tabPosition = TabPosition.Top;
     private int selectedTabIndex;
-
-    private readonly IReadOnlyList<object> tabPositionOptions = Enum
-        .GetValues<TabPosition>()
-        .Select(value => new { Text = value.ToString(), Value = value })
-        .Cast<object>()
-        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -217,5 +204,10 @@ else if (user is not null)
     private void BackToUsers()
     {
         Navigation.NavigateTo("/users");
+    }
+
+    private void OpenEmailVerification()
+    {
+        Navigation.NavigateTo($"/users/{UserId}/email-verification");
     }
 }

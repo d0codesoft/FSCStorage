@@ -1,4 +1,5 @@
 @inject AdminApiClient ApiClient
+@inject NavigationManager Navigation
 
 @if (!string.IsNullOrWhiteSpace(statusMessage))
 {
@@ -59,6 +60,10 @@
     <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.5rem" class="rz-mb-4">
         <RadzenBadge BadgeStyle="@(User.IsActive ? BadgeStyle.Success : BadgeStyle.Secondary)" Text="@(User.IsActive ? "Active" : "Inactive")" />
         <RadzenBadge BadgeStyle="@(User.IsLocked ? BadgeStyle.Warning : BadgeStyle.Light)" Text="@(User.IsLocked ? "Locked" : "Unlocked")" />
+        @if (!string.IsNullOrWhiteSpace(User.Email))
+        {
+            <RadzenBadge BadgeStyle="@(User.EmailConfirmed ? BadgeStyle.Success : BadgeStyle.Warning)" Text="@(User.EmailConfirmed ? "Email verified" : "Email unverified")" />
+        }
         @if (User.PhoneNumber is not null)
         {
             <RadzenBadge BadgeStyle="@(User.PhoneNumberConfirmed ? BadgeStyle.Success : BadgeStyle.Light)" Text="@(User.PhoneNumberConfirmed ? "Phone confirmed" : "Phone unconfirmed")" />
@@ -69,6 +74,10 @@
         <RadzenStack Orientation="Orientation.Horizontal" Gap="0.5rem">
             <RadzenButton Text="Save" Icon="save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" Disabled="@isBusy" IsBusy="@isBusy" />
             <RadzenButton Text="Reload" Icon="refresh" ButtonStyle="ButtonStyle.Light" Click="@ReloadAsync" Disabled="@isBusy" />
+            @if (!string.IsNullOrWhiteSpace(User.Email) && !User.EmailConfirmed)
+            {
+                <RadzenButton Text="Verify email" Icon="mark_email_read" ButtonStyle="ButtonStyle.Info" Click="@OpenEmailVerification" Disabled="@isBusy" />
+            }
         </RadzenStack>
 
         @if (CanManageAccount)
@@ -135,6 +144,11 @@
         var updated = await ApiClient.GetUserAsync(User.UserId);
         if (updated is not null)
             await UserChanged.InvokeAsync(updated);
+    }
+
+    private void OpenEmailVerification()
+    {
+        Navigation.NavigateTo($"/users/{User.UserId}/email-verification");
     }
 
     private async Task ToggleActiveAsync()

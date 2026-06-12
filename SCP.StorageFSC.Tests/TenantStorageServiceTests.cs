@@ -4,6 +4,7 @@ using scp.filestorage.Data.Models;
 using SCP.StorageFSC.Data.Dto;
 using SCP.StorageFSC.Data.Models;
 using SCP.StorageFSC.Data.Repositories;
+using SCP.StorageFSC.InterfacesService;
 using SCP.StorageFSC.Services;
 using System.Security.Claims;
 using scp.filestorage.Data.Repositories;
@@ -17,6 +18,7 @@ public sealed class TenantStorageServiceTests
     private readonly InMemoryApiTokenRepository _tokens = new();
     private readonly InMemoryUserRepository _users = new();
     private readonly InMemoryUserRoleRepository _userRoles = new();
+    private readonly InMemoryUserTwoFactorChallengeRepository _twoFactorChallenges = new();
     private readonly InMemoryUserTwoFactorMethodRepository _twoFactorMethods = new();
     private readonly InMemoryUserRecoveryCodeRepository _recoveryCodes = new();
     private readonly InMemoryTenantFileRepository _tenantFiles = new();
@@ -222,7 +224,7 @@ public sealed class TenantStorageServiceTests
         }, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
-        var sut = CreateService();
+        var sut = CreateUserService();
 
         var result = await sut.GetUsersWithTenantsAsync(cancellationToken);
 
@@ -433,7 +435,7 @@ public sealed class TenantStorageServiceTests
         }, cancellationToken);
 
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
-        var sut = CreateService();
+        var sut = CreateUserService();
 
         var deleted = await sut.DeleteUserAsync(owner.Id, cancellationToken);
 
@@ -513,7 +515,7 @@ public sealed class TenantStorageServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
-        var sut = CreateService();
+        var sut = CreateUserService();
 
         var result = await sut.CreateUserAsync(new CreateUserRequest
         {
@@ -558,7 +560,7 @@ public sealed class TenantStorageServiceTests
         };
         await _users.InsertAsync(user, cancellationToken);
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
-        var sut = CreateService();
+        var sut = CreateUserService();
 
         var result = await sut.UpdateUserProfileAsync(user.Id, new UpdateUserProfileRequest
         {
@@ -597,7 +599,7 @@ public sealed class TenantStorageServiceTests
         };
         await _users.InsertAsync(user, cancellationToken);
         SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
-        var sut = CreateService();
+        var sut = CreateUserService();
 
         var changed = await sut.ResetUserPasswordAsync(user.Id, new ResetUserPasswordRequest
         {
@@ -614,13 +616,114 @@ public sealed class TenantStorageServiceTests
         Assert.NotNull(user.PasswordChangedUtc);
     }
 
+    [Fact]
+    public async Task EnableUserTwoFactorAsync_WhenNoActiveMethod_ThrowsInvalidOperationException()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var user = new User
+        {
+            Name = "Diana",
+            NormalizedName = "DIANA",
+            PasswordHash = "hash"
+        };
+        await _users.InsertAsync(user, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateUserService();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.EnableUserTwoFactorAsync(user.Id, cancellationToken));
+
+        Assert.False(user.TwoFactorEnabled);
+        Assert.Null(user.TwoFactorEnabledUtc);
+    }
+
+    [Fact]
+    public async Task EnableUserTwoFactorAsync_WhenActiveMethodExists_EnablesTwoFactor()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var user = new User
+        {
+            Name = "Erin",
+            NormalizedName = "ERIN",
+            PasswordHash = "hash"
+        };
+        await _users.InsertAsync(user, cancellationToken);
+        await _twoFactorMethods.InsertAsync(new UserTwoFactorMethod
+        {
+            UserId = user.Id,
+            MethodType = TwoFactorMethodType.AuthenticatorApp,
+            IsEnabled = true,
+            IsConfirmed = true,
+            IsDefault = true,
+            ConfirmedUtc = DateTime.UtcNow
+        }, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sut = CreateUserService();
+
+        var enabled = await sut.EnableUserTwoFactorAsync(user.Id, cancellationToken);
+
+        Assert.True(enabled);
+        Assert.True(user.TwoFactorEnabled);
+        Assert.NotNull(user.TwoFactorEnabledUtc);
+    }
+
+    [Fact]
+    public async Task ConfirmUserEmailAsync_WhenCodeIsValid_ConfirmsEmailAndCreatesEmailTwoFactorMethod()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var user = new User
+        {
+            Name = "Frank",
+            NormalizedName = "FRANK",
+            Email = "frank@example.com",
+            NormalizedEmail = "FRANK@EXAMPLE.COM",
+            EmailConfirmed = false,
+            PasswordHash = "hash"
+        };
+        await _users.InsertAsync(user, cancellationToken);
+        SetCurrentUser(Guid.CreateVersion7(), isAdmin: true);
+        var sender = new TestOneTimeCodeSender();
+        var sut = CreateUserService(sender);
+
+        var sent = await sut.SendUserEmailConfirmationAsync(user.Id, cancellationToken);
+        var confirmed = await sut.ConfirmUserEmailAsync(user.Id, sender.LastEmailCode!, cancellationToken);
+
+        var emailMethod = await _twoFactorMethods.GetByUserAndTypeAsync(
+            user.Id,
+            TwoFactorMethodType.Email,
+            cancellationToken);
+
+        Assert.True(sent);
+        Assert.True(confirmed);
+        Assert.True(user.EmailConfirmed);
+        Assert.NotNull(emailMethod);
+        Assert.True(emailMethod!.IsEnabled);
+        Assert.True(emailMethod.IsConfirmed);
+        Assert.Equal("frank@example.com", emailMethod.Destination);
+        Assert.Equal("fr***@example.com", emailMethod.MaskedDestination);
+    }
+
     private TenantStorageService CreateService()
     {
         return new TenantStorageService(
             _tenants,
             _tokens,
             _users,
+            _tenantFiles,
+            _storedFiles,
+            _deletedTenants,
+            _httpContextAccessor,
+            NullLogger<TenantStorageService>.Instance);
+    }
+
+    private UserStorageService CreateUserService(TestOneTimeCodeSender? oneTimeCodeSender = null)
+    {
+        return new UserStorageService(
+            _tenants,
+            _tokens,
+            _users,
             _userRoles,
+            _twoFactorChallenges,
             _tenantFiles,
             _storedFiles,
             _deletedTenants,
@@ -628,9 +731,31 @@ public sealed class TenantStorageServiceTests
             _twoFactorMethods,
             _recoveryCodes,
             new TestAuthenticationHashService(),
+            new FakeUserAuthenticationAuditService(),
+            oneTimeCodeSender ?? new TestOneTimeCodeSender(),
             _httpContextAccessor,
-            NullLogger<TenantStorageService>.Instance);
+            NullLogger<UserStorageService>.Instance);
     }
+
+        private sealed class FakeUserAuthenticationAuditService : IUserAuthenticationAuditService
+        {
+            public Task LogPasswordLoginAsync(HttpContext context, string login, LoginResult result, CancellationToken cancellationToken = default)
+                => Task.CompletedTask;
+
+            public Task LogTwoFactorAsync(HttpContext context, VerifyTwoFactorResult result, string eventType, CancellationToken cancellationToken = default)
+                => Task.CompletedTask;
+
+            public Task<UserAuthenticationNotificationPageDto> GetNotificationsAsync(Guid? userId = null, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(new UserAuthenticationNotificationPageDto
+                {
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalCount = 0,
+                    Items = []
+                });
+            }
+        }
 
     private void SetCurrentUser(Guid userId, bool isAdmin)
     {
@@ -998,6 +1123,47 @@ public sealed class TenantStorageServiceTests
     private sealed class TestAuthenticationHashService : IAuthenticationHashService
     {
         public string HashSecret(string value) => $"hash::{value}";
+    }
+
+    private sealed class TestOneTimeCodeSender : IOneTimeCodeSender
+    {
+        public string? LastEmail { get; private set; }
+        public string? LastEmailCode { get; private set; }
+
+        public Task SendEmailCodeAsync(string email, string code, CancellationToken cancellationToken = default)
+        {
+            LastEmail = email;
+            LastEmailCode = code;
+            return Task.CompletedTask;
+        }
+
+        public Task SendSmsCodeAsync(string phoneNumber, string code, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class InMemoryUserTwoFactorChallengeRepository : IUserTwoFactorChallengeRepository
+    {
+        private readonly List<UserTwoFactorChallenge> _items = [];
+
+        public Task<bool> InsertAsync(UserTwoFactorChallenge challenge, CancellationToken cancellationToken = default)
+        {
+            _items.Add(challenge);
+            return Task.FromResult(true);
+        }
+
+        public Task<UserTwoFactorChallenge?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.FirstOrDefault(x => x.Id == id));
+
+        public Task<IReadOnlyList<UserTwoFactorChallenge>> GetPendingByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<UserTwoFactorChallenge>>(_items
+                .Where(x => x.UserId == userId && x.VerifiedUtc is null && x.ExpiresUtc > DateTime.UtcNow)
+                .ToList());
+
+        public Task<bool> UpdateAsync(UserTwoFactorChallenge challenge, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.Any(x => x.Id == challenge.Id));
+
+        public Task<bool> DeleteExpiredAsync(DateTime utcNow, CancellationToken cancellationToken = default)
+            => Task.FromResult(_items.RemoveAll(x => x.ExpiresUtc <= utcNow) > 0);
     }
 
     private sealed class InMemoryUserTwoFactorMethodRepository : IUserTwoFactorMethodRepository

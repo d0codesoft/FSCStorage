@@ -40,42 +40,16 @@
         <RadzenCard class="details-panel">
             <div class="details-header">
                 <h2>@(editingTenantId.HasValue ? "Edit Instance" : "New Instance")</h2>
-                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CancelEdit">Close</button>
+                <RadzenButton Text="Close" Icon="close" Size="ButtonSize.Small" ButtonStyle="ButtonStyle.Light" Click="@CancelEdit" Disabled="@isBusy" />
             </div>
 
-            <EditForm Model="@tenantEditor" OnValidSubmit="@SaveTenantAsync">
-                <DataAnnotationsValidator />
-                <div class="admin-form-grid">
-                    <div>
-                        @if (isAdmin && !editingTenantId.HasValue)
-                        {
-                            <label class="form-label" for="tenant-owner">Owner user</label>
-                            <InputSelect id="tenant-owner" class="form-select" @bind-Value="tenantEditor.UserId">
-                                <option value="@Guid.Empty">Select user</option>
-                                @foreach (var user in users)
-                                {
-                                    <option value="@user.UserId">@user.UserName</option>
-                                }
-                            </InputSelect>
-                            <ValidationMessage For="@(() => tenantEditor.UserId)" />
-                        }
-                    </div>
-                    <div>
-                        <label class="form-label" for="tenant-name">Name</label>
-                        <InputText id="tenant-name" class="form-control" @bind-Value="tenantEditor.Name" />
-                        <ValidationMessage For="@(() => tenantEditor.Name)" />
-                    </div>
-                    <div class="form-check admin-check">
-                        <InputCheckbox id="tenant-active" class="form-check-input" @bind-Value="tenantEditor.IsActive" />
-                        <label class="form-check-label" for="tenant-active">Tenant is active</label>
-                    </div>
-                </div>
-
-                <div class="button-row">
-                    <button type="submit" class="btn btn-primary" disabled="@isBusy">Save tenant</button>
-                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelEdit" disabled="@isBusy">Cancel</button>
-                </div>
-            </EditForm>
+            <TenantEditorForm Model="@tenantEditor"
+                              Users="@users"
+                              ShowOwner="@(!editingTenantId.HasValue)"
+                              IsBusy="@isBusy"
+                              Submit="@SaveTenantAsync"
+                              Cancel="@CancelEdit"
+                              SubmitText="Save tenant" />
         </RadzenCard>
     </section>
 }

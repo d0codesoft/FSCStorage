@@ -61,7 +61,7 @@ else if (tenant is not null)
                 <h2>Tenant settings</h2>
                 @if (isAdmin)
                 {
-                    <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DeleteTenantAsync" disabled="@isBusy">Delete tenant</button>
+                    <RadzenButton Text="Delete tenant" Icon="delete" Size="ButtonSize.Small" Click="@DeleteTenantAsync" Disabled="@isBusy" ButtonStyle="ButtonStyle.Danger" />
                 }
             </div>
 
@@ -80,24 +80,10 @@ else if (tenant is not null)
 
             @if (isAdmin)
             {
-                <EditForm Model="@tenantEditor" OnValidSubmit="@SaveTenantAsync">
-                    <DataAnnotationsValidator />
-                    <div class="admin-form-grid">
-                        <div>
-                            <label class="form-label" for="tenant-details-name">Name</label>
-                            <InputText id="tenant-details-name" class="form-control" @bind-Value="tenantEditor.Name" />
-                            <ValidationMessage For="@(() => tenantEditor.Name)" />
-                        </div>
-                        <div class="form-check admin-check">
-                            <InputCheckbox id="tenant-details-active" class="form-check-input" @bind-Value="tenantEditor.IsActive" />
-                            <label class="form-check-label" for="tenant-details-active">Tenant is active</label>
-                        </div>
-                    </div>
-
-                    <div class="button-row">
-                        <button type="submit" class="btn btn-primary" disabled="@isBusy">Save tenant</button>
-                    </div>
-                </EditForm>
+                <TenantEditorForm Model="@tenantEditor"
+                                  IsBusy="@isBusy"
+                                  Submit="@SaveTenantAsync"
+                                  SubmitText="Save tenant" />
             }
         </RadzenCard>
     </section>

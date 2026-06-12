@@ -174,6 +174,35 @@ namespace scp.filestorage.webui.Services
         public Task DisableUserTwoFactorAsync(Guid userId, CancellationToken cancellationToken = default)
             => PostUserActionAsync(userId, "2fa/disable", cancellationToken);
 
+        public async Task<AuthenticatorSetupViewModel> SetupUserAuthenticatorAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsync(
+                $"ui-api/users/{userId}/2fa/setup-authenticator",
+                null,
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            return await response.Content.ReadFromJsonAsync<AuthenticatorSetupViewModel>(
+                cancellationToken: cancellationToken)
+                ?? new AuthenticatorSetupViewModel { Status = TwoFactorSetupStatus.UserNotFound };
+        }
+
+        public async Task ConfirmUserAuthenticatorAsync(
+            Guid userId,
+            string code,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/users/{userId}/2fa/confirm-authenticator",
+                new ConfirmAuthenticatorRequestModel { Code = code },
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
         public async Task SetUserPreferredTwoFactorMethodAsync(
             Guid userId,
             TwoFactorMethodType methodType,
@@ -255,6 +284,31 @@ namespace scp.filestorage.webui.Services
             CancellationToken cancellationToken = default)
         {
             var response = await _httpClient.PostAsJsonAsync("auth/change-password", request, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public async Task SendUserEmailConfirmationAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsync(
+                $"ui-api/users/{userId}/email/send-confirmation",
+                null,
+                cancellationToken);
+
+            await EnsureSuccessAsync(response, cancellationToken);
+        }
+
+        public async Task ConfirmUserEmailAsync(
+            Guid userId,
+            string code,
+            CancellationToken cancellationToken = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                $"ui-api/users/{userId}/email/confirm",
+                new ConfirmUserEmailRequestModel { Code = code },
+                cancellationToken);
+
             await EnsureSuccessAsync(response, cancellationToken);
         }
 

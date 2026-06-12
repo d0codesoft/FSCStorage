@@ -5,7 +5,10 @@ using scp.filestorage.Security;
 using scp.filestorage.Services.Auth;
 using SCP.StorageFSC.Controllers;
 using SCP.StorageFSC.Data.Dto;
+using SCP.StorageFSC.InterfacesService;
+using System.Net;
 using System.Security.Claims;
+using AuthLoginRequest = scp.filestorage.Services.Auth.LoginRequest;
 
 namespace SCP.StorageFSC.Tests
 {
@@ -95,11 +98,79 @@ namespace SCP.StorageFSC.Tests
             Assert.Null(authenticationService.ChangePasswordUserId);
         }
 
+        [Fact]
+        public async Task Login_WhenInvalidCredentials_LogsAuditFailureWithClientContext()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var authenticationService = new FakeAuthenticationService
+            {
+                LoginResult = new LoginResult
+                {
+                    Status = AuthLoginStatus.InvalidCredentials
+                }
+            };
+            var auditService = new FakeUserAuthenticationAuditService();
+            var controller = CreateController(
+                authenticationService,
+                new ClaimsPrincipal(new ClaimsIdentity()),
+                auditService);
+
+            controller.HttpContext.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.5");
+            controller.HttpContext.Request.Path = "/auth/login";
+
+            var result = await controller.Login(
+                new AuthLoginRequest
+                {
+                    Login = "user@example.com",
+                    Password = "wrong-password"
+                },
+                cancellationToken);
+
+            Assert.IsType<UnauthorizedObjectResult>(result);
+            Assert.Equal("user@example.com", auditService.PasswordLoginLogin);
+            Assert.NotNull(auditService.PasswordLoginResult);
+            Assert.Equal(AuthLoginStatus.InvalidCredentials, auditService.PasswordLoginResult.Status);
+        }
+
+        [Fact]
+        public async Task VerifyTwoFactor_WhenCodeIsInvalid_LogsTwoFactorAuditFailure()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            var authenticationService = new FakeAuthenticationService
+            {
+                VerifyTwoFactorResult = new VerifyTwoFactorResult
+                {
+                    Status = TwoFactorVerifyStatus.InvalidCode
+                }
+            };
+            var auditService = new FakeUserAuthenticationAuditService();
+            var controller = CreateController(
+                authenticationService,
+                new ClaimsPrincipal(new ClaimsIdentity()),
+                auditService);
+
+            var result = await controller.VerifyTwoFactor(
+                new VerifyTwoFactorLoginRequest
+                {
+                    ChallengeToken = "challenge",
+                    Code = "000000"
+                },
+                cancellationToken);
+
+            Assert.IsType<UnauthorizedObjectResult>(result);
+            Assert.Equal("TwoFactor", auditService.TwoFactorEventType);
+            Assert.NotNull(auditService.TwoFactorResult);
+            Assert.Equal(TwoFactorVerifyStatus.InvalidCode, auditService.TwoFactorResult.Status);
+        }
+
         private static AuthController CreateController(
             IAuthenticationService authenticationService,
-            ClaimsPrincipal user)
+            ClaimsPrincipal user,
+            IUserAuthenticationAuditService? auditService = null)
         {
-            return new AuthController(authenticationService)
+            return new AuthController(
+                authenticationService,
+                auditService ?? new FakeUserAuthenticationAuditService())
             {
                 ControllerContext = new ControllerContext
                 {
@@ -113,19 +184,21 @@ namespace SCP.StorageFSC.Tests
 
         private sealed class FakeAuthenticationService : IAuthenticationService
         {
+            public LoginResult LoginResult { get; init; } = new();
+            public VerifyTwoFactorResult VerifyTwoFactorResult { get; init; } = new();
             public bool ChangePasswordResult { get; init; }
             public Guid? ChangePasswordUserId { get; private set; }
             public string? ChangePasswordCurrentPassword { get; private set; }
             public string? ChangePasswordNewPassword { get; private set; }
 
-            public Task<LoginResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
+            public Task<LoginResult> LoginAsync(AuthLoginRequest request, CancellationToken cancellationToken = default)
             {
-                throw new NotSupportedException();
+                return Task.FromResult(LoginResult);
             }
 
             public Task<VerifyTwoFactorResult> VerifyTwoFactorAsync(VerifyTwoFactorRequest request, CancellationToken cancellationToken = default)
             {
-                throw new NotSupportedException();
+                return Task.FromResult(VerifyTwoFactorResult);
             }
 
             public Task<VerifyTwoFactorResult> VerifyRecoveryCodeAsync(VerifyTwoFactorRequest request, CancellationToken cancellationToken = default)
@@ -174,6 +247,51 @@ namespace SCP.StorageFSC.Tests
             public Task<IReadOnlyList<Role>> GetUserRolesAsync(Guid userId, CancellationToken cancellationToken = default)
             {
                 throw new NotSupportedException();
+            }
+        }
+
+        private sealed class FakeUserAuthenticationAuditService : IUserAuthenticationAuditService
+        {
+            public string? PasswordLoginLogin { get; private set; }
+            public LoginResult? PasswordLoginResult { get; private set; }
+            public string? TwoFactorEventType { get; private set; }
+            public VerifyTwoFactorResult? TwoFactorResult { get; private set; }
+
+            public Task LogPasswordLoginAsync(
+                HttpContext context,
+                string login,
+                LoginResult result,
+                CancellationToken cancellationToken = default)
+            {
+                PasswordLoginLogin = login;
+                PasswordLoginResult = result;
+                return Task.CompletedTask;
+            }
+
+            public Task LogTwoFactorAsync(
+                HttpContext context,
+                VerifyTwoFactorResult result,
+                string eventType,
+                CancellationToken cancellationToken = default)
+            {
+                TwoFactorResult = result;
+                TwoFactorEventType = eventType;
+                return Task.CompletedTask;
+            }
+
+            public Task<UserAuthenticationNotificationPageDto> GetNotificationsAsync(
+                Guid? userId = null,
+                int pageNumber = 1,
+                int pageSize = 20,
+                CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(new UserAuthenticationNotificationPageDto
+                {
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalCount = 0,
+                    Items = []
+                });
             }
         }
     }

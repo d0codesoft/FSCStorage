@@ -16,18 +16,18 @@ namespace scp.filestorage.Controllers
     {
         private const string AuthenticatorIssuer = "FSCStorage";
 
-        private readonly ITenantStorageService _tenantStorageService;
+        private readonly IUserStorageService _userStorageService;
         private readonly IFileStorageBackgroundTaskQueue _backgroundTaskQueue;
         private readonly FscAuthenticationService _authenticationService;
         private readonly ILogger<UsersController> _logger;
 
         public UsersController(
-            ITenantStorageService tenantStorageService,
+            IUserStorageService userStorageService,
             IFileStorageBackgroundTaskQueue backgroundTaskQueue,
             FscAuthenticationService authenticationService,
             ILogger<UsersController> logger)
         {
-            _tenantStorageService = tenantStorageService;
+            _userStorageService = userStorageService;
             _backgroundTaskQueue = backgroundTaskQueue;
             _authenticationService = authenticationService;
             _logger = logger;
@@ -37,7 +37,7 @@ namespace scp.filestorage.Controllers
         [ProducesResponseType(typeof(IReadOnlyList<UserManagementDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetUsers(CancellationToken cancellationToken)
         {
-            return Ok(await _tenantStorageService.GetUsersAsync(cancellationToken));
+            return Ok(await _userStorageService.GetUsersAsync(cancellationToken));
         }
 
         [HttpGet("{userId:guid}")]
@@ -45,7 +45,7 @@ namespace scp.filestorage.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<IActionResult> GetUser(Guid userId, CancellationToken cancellationToken)
         {
-            var result = await _tenantStorageService.GetUserAsync(userId, cancellationToken);
+            var result = await _userStorageService.GetUserAsync(userId, cancellationToken);
             return result is null ? NotFound() : Ok(result);
         }
 
@@ -53,7 +53,7 @@ namespace scp.filestorage.Controllers
         [ProducesResponseType(typeof(IReadOnlyList<UserTenantsDto>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetUsersWithTenants(CancellationToken cancellationToken)
         {
-            return Ok(await _tenantStorageService.GetUsersWithTenantsAsync(cancellationToken));
+            return Ok(await _userStorageService.GetUsersWithTenantsAsync(cancellationToken));
         }
 
         [HttpPost]
@@ -64,7 +64,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                var result = await _tenantStorageService.CreateUserAsync(request, cancellationToken);
+                var result = await _userStorageService.CreateUserAsync(request, cancellationToken);
                 return CreatedAtAction(nameof(GetUser), new { userId = result.UserId }, result);
             }
             catch (ArgumentException ex)
@@ -87,7 +87,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                var result = await _tenantStorageService.UpdateUserProfileAsync(userId, request, cancellationToken);
+                var result = await _userStorageService.UpdateUserProfileAsync(userId, request, cancellationToken);
                 return result is null ? NotFound() : Ok(result);
             }
             catch (ArgumentException ex)
@@ -107,7 +107,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                if (!await _tenantStorageService.DeleteUserAsync(userId, cancellationToken))
+                if (!await _userStorageService.DeleteUserAsync(userId, cancellationToken))
                     return NotFound();
 
                 await _backgroundTaskQueue.QueueAsync(
@@ -124,22 +124,22 @@ namespace scp.filestorage.Controllers
 
         [HttpPost("{userId:guid}/activate")]
         public async Task<IActionResult> ActivateUser(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.ActivateUserAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.ActivateUserAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/deactivate")]
         public async Task<IActionResult> DeactivateUser(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.DeactivateUserAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.DeactivateUserAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/lock")]
         public async Task<IActionResult> LockUser(
             Guid userId,
             [FromBody] LockUserRequest request,
             CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.LockUserAsync(userId, request.LockedUntilUtc, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.LockUserAsync(userId, request.LockedUntilUtc, cancellationToken));
 
         [HttpPost("{userId:guid}/unlock")]
         public async Task<IActionResult> UnlockUser(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.UnlockUserAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.UnlockUserAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/block")]
         [ApiExplorerSettings(IgnoreApi = true)]
@@ -160,7 +160,7 @@ namespace scp.filestorage.Controllers
 
         [HttpPost("{userId:guid}/reset-failed-login-count")]
         public async Task<IActionResult> ResetFailedLoginCount(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.ResetFailedLoginCountAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.ResetFailedLoginCountAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/password/change")]
         public async Task<IActionResult> ChangePassword(
@@ -188,7 +188,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                return await NoContentOrNotFoundAsync(_tenantStorageService.ResetUserPasswordAsync(userId, request, cancellationToken));
+                return await NoContentOrNotFoundAsync(_userStorageService.ResetUserPasswordAsync(userId, request, cancellationToken));
             }
             catch (ArgumentException ex)
             {
@@ -198,7 +198,7 @@ namespace scp.filestorage.Controllers
 
         [HttpPost("{userId:guid}/password/expire")]
         public async Task<IActionResult> ExpirePassword(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.ExpireUserPasswordAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.ExpireUserPasswordAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/email/change")]
         public async Task<IActionResult> ChangeEmail(
@@ -208,7 +208,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                return await NoContentOrNotFoundAsync(_tenantStorageService.ChangeUserEmailAsync(userId, request.Email, cancellationToken));
+                return await NoContentOrNotFoundAsync(_userStorageService.ChangeUserEmailAsync(userId, request.Email, cancellationToken));
             }
             catch (ArgumentException ex)
             {
@@ -221,18 +221,42 @@ namespace scp.filestorage.Controllers
         }
 
         [HttpPost("{userId:guid}/email/confirm")]
-        public async Task<IActionResult> ConfirmEmail(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserEmailConfirmedAsync(userId, true, cancellationToken));
+        public async Task<IActionResult> ConfirmEmail(
+            Guid userId,
+            [FromBody] ConfirmUserEmailRequest request,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await NoContentOrNotFoundAsync(_userStorageService.ConfirmUserEmailAsync(userId, request.Code, cancellationToken));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+        }
 
         [HttpPost("{userId:guid}/email/unconfirm")]
         public async Task<IActionResult> UnconfirmEmail(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserEmailConfirmedAsync(userId, false, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.SetUserEmailConfirmedAsync(userId, false, cancellationToken));
 
         [HttpPost("{userId:guid}/email/send-confirmation")]
-        public IActionResult SendEmailConfirmation(Guid userId)
+        public async Task<IActionResult> SendEmailConfirmation(Guid userId, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Email confirmation requested for user {UserId}.", userId);
-            return Accepted();
+            try
+            {
+                return await _userStorageService.SendUserEmailConfirmationAsync(userId, cancellationToken)
+                    ? Accepted()
+                    : NotFound();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
         }
 
         [HttpPost("{userId:guid}/phone/change")]
@@ -243,7 +267,7 @@ namespace scp.filestorage.Controllers
         {
             try
             {
-                return await NoContentOrNotFoundAsync(_tenantStorageService.ChangeUserPhoneAsync(userId, request.PhoneNumber, cancellationToken));
+                return await NoContentOrNotFoundAsync(_userStorageService.ChangeUserPhoneAsync(userId, request.PhoneNumber, cancellationToken));
             }
             catch (ArgumentException ex)
             {
@@ -253,11 +277,11 @@ namespace scp.filestorage.Controllers
 
         [HttpPost("{userId:guid}/phone/confirm")]
         public async Task<IActionResult> ConfirmPhone(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserPhoneConfirmedAsync(userId, true, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.SetUserPhoneConfirmedAsync(userId, true, cancellationToken));
 
         [HttpPost("{userId:guid}/phone/unconfirm")]
         public async Task<IActionResult> UnconfirmPhone(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserPhoneConfirmedAsync(userId, false, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.SetUserPhoneConfirmedAsync(userId, false, cancellationToken));
 
         [HttpPost("{userId:guid}/phone/send-confirmation")]
         public IActionResult SendPhoneConfirmation(Guid userId)
@@ -269,7 +293,7 @@ namespace scp.filestorage.Controllers
         [HttpGet("{userId:guid}/2fa/status")]
         public async Task<IActionResult> GetTwoFactorStatus(Guid userId, CancellationToken cancellationToken)
         {
-            var result = await _tenantStorageService.GetUserTwoFactorStatusAsync(userId, cancellationToken);
+            var result = await _userStorageService.GetUserTwoFactorStatusAsync(userId, cancellationToken);
             return result is null ? NotFound() : Ok(result);
         }
 
@@ -298,57 +322,57 @@ namespace scp.filestorage.Controllers
 
         [HttpPost("{userId:guid}/2fa/enable")]
         public async Task<IActionResult> EnableTwoFactor(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.EnableUserTwoFactorAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.EnableUserTwoFactorAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/2fa/disable")]
         public async Task<IActionResult> DisableTwoFactor(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.DisableUserTwoFactorAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.DisableUserTwoFactorAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/2fa/set-preferred-method")]
         public async Task<IActionResult> SetPreferredTwoFactorMethod(
             Guid userId,
             [FromBody] SetPreferredTwoFactorMethodRequest request,
             CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserPreferredTwoFactorMethodAsync(userId, request, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.SetUserPreferredTwoFactorMethodAsync(userId, request, cancellationToken));
 
         [HttpPost("{userId:guid}/2fa/set-required-for-every-login")]
         public async Task<IActionResult> SetRequiredForEveryLogin(
             Guid userId,
             [FromBody] SetTwoFactorRequiredRequest request,
             CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.SetUserTwoFactorRequiredForEveryLoginAsync(userId, request.Required, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.SetUserTwoFactorRequiredForEveryLoginAsync(userId, request.Required, cancellationToken));
 
         [HttpPost("{userId:guid}/2fa/reset")]
         public async Task<IActionResult> ResetTwoFactor(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.ResetUserTwoFactorAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.ResetUserTwoFactorAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/2fa/recovery-codes/regenerate")]
         public async Task<IActionResult> RegenerateRecoveryCodes(Guid userId, CancellationToken cancellationToken)
         {
-            var codes = await _tenantStorageService.RegenerateUserRecoveryCodesAsync(userId, cancellationToken);
+            var codes = await _userStorageService.RegenerateUserRecoveryCodesAsync(userId, cancellationToken);
             return codes.Length == 0 ? NotFound() : Ok(new { recoveryCodes = codes });
         }
 
         [HttpPost("{userId:guid}/security-stamp/refresh")]
         public async Task<IActionResult> RefreshSecurityStamp(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.RefreshUserSecurityStampAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.RefreshUserSecurityStampAsync(userId, cancellationToken));
 
         [HttpPost("{userId:guid}/sessions/revoke")]
         [HttpPost("{userId:guid}/sessions/revoke-all")]
         public async Task<IActionResult> RevokeSessions(Guid userId, CancellationToken cancellationToken)
-            => await NoContentOrNotFoundAsync(_tenantStorageService.RefreshUserSecurityStampAsync(userId, cancellationToken));
+            => await NoContentOrNotFoundAsync(_userStorageService.RefreshUserSecurityStampAsync(userId, cancellationToken));
 
         [HttpGet("{userId:guid}/sessions")]
         public async Task<IActionResult> GetSessions(Guid userId, CancellationToken cancellationToken)
         {
-            var result = await _tenantStorageService.GetUserSessionsAsync(userId, cancellationToken);
+            var result = await _userStorageService.GetUserSessionsAsync(userId, cancellationToken);
             return result is null ? NotFound() : Ok(result);
         }
 
         [HttpGet("{userId:guid}/login-history")]
         public async Task<IActionResult> GetLoginHistory(Guid userId, CancellationToken cancellationToken)
         {
-            var result = await _tenantStorageService.GetUserLoginHistoryAsync(userId, cancellationToken);
+            var result = await _userStorageService.GetUserLoginHistoryAsync(userId, cancellationToken);
             return result is null ? NotFound() : Ok(result);
         }
 
@@ -356,7 +380,7 @@ namespace scp.filestorage.Controllers
         [HttpGet("{userId:guid}/audit")]
         public async Task<IActionResult> GetSecurityEvents(Guid userId, CancellationToken cancellationToken)
         {
-            var result = await _tenantStorageService.GetUserSecurityEventsAsync(userId, cancellationToken);
+            var result = await _userStorageService.GetUserSecurityEventsAsync(userId, cancellationToken);
             return result is null ? NotFound() : Ok(result);
         }
 
@@ -365,7 +389,7 @@ namespace scp.filestorage.Controllers
         {
             return Ok(new UniqueCheckResultDto
             {
-                IsUnique = await _tenantStorageService.IsUserNameUniqueAsync(name, cancellationToken: cancellationToken)
+                IsUnique = await _userStorageService.IsUserNameUniqueAsync(name, cancellationToken: cancellationToken)
             });
         }
 
@@ -374,7 +398,7 @@ namespace scp.filestorage.Controllers
         {
             return Ok(new UniqueCheckResultDto
             {
-                IsUnique = await _tenantStorageService.IsUserEmailUniqueAsync(email, cancellationToken: cancellationToken)
+                IsUnique = await _userStorageService.IsUserEmailUniqueAsync(email, cancellationToken: cancellationToken)
             });
         }
 
